@@ -127,7 +127,7 @@ module BitterHSP {
             return AXData.getCStr(this.ds, index);
         }
 
-	    private getDSDouble(index: number) {
+        private getDSDouble(index: number) {
             return new BinaryReader(this.ds.slice(0, 8)).readDouble();
         }
 
