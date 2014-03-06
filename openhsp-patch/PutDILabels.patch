@@ -2,7 +2,7 @@ Index: codegen.cpp
 ===================================================================
 --- codegen.cpp	(revision 617)
 +++ codegen.cpp	(working copy)
-@@ -2610,7 +2610,30 @@
+@@ -2610,7 +2610,29 @@
  	}
  }
  
@@ -22,7 +22,6 @@ Index: codegen.cpp
 +	di_buf->Put((unsigned char)254);
 +	for (int i = 0; i < num; i ++) {
 +		if (table[i] == -1) continue;
-+		printf("table[%d] = %d\n", i, table[i]);
 +		char *name = lb->GetName(table[i]);
 +		int dsPos = PutDS(name);
 +		PutDI(253, dsPos, i);
@@ -33,7 +32,7 @@ Index: codegen.cpp
  char *CToken::GetDS( int ptr )
  {
  	int i;
-@@ -2905,6 +2928,7 @@
+@@ -2905,6 +2927,7 @@
  		}
  		if (( cg_debug )||( cg_putvars )) {
  			PutDIVars();
