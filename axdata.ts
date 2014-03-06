@@ -17,7 +17,8 @@ module BitterHSP {
         private finfo2: string;
         private hpidat: string;
 
-        public tokens : Array<Token>;
+        public tokens: Array<Token>;
+        public variableNames: Array<string>;
 
         constructor(private data: string) {
             var r = new BinaryReader(data.substr(0, 96));
@@ -64,6 +65,7 @@ module BitterHSP {
             this.hpidat = data.substr(pt_hpidat, max_hpi);
 
             this.tokens = this.createTokens();
+            this.variableNames = this.createVariableNames();
         }
 
         private createTokens(): Array<Token> {
@@ -93,7 +95,7 @@ module BitterHSP {
                         break;
                     }
                     if (ofs == 254) {
-                        var dsOffset = dinfo.readUInt24();
+                        var dsOffset = dinfo.readUint24();
                         if (dsOffset != 0 || fileName == undefined) {
                             fileName = this.getDSStr(dsOffset);
                         }
@@ -101,7 +103,7 @@ module BitterHSP {
                         continue;
                     }
                     if (ofs == 253) {
-                        dinfo.readUInt24();
+                        dinfo.readUint24();
                         dinfo.readUint16();
                         continue;
                     }
@@ -121,6 +123,28 @@ module BitterHSP {
                 pos += size;
             }
             return tokens;
+        }
+
+        private createVariableNames() {
+            var variableNames = new Array<string>(this.max_val);
+            var dinfo = new BinaryReader(this.dinfo);
+            var i = 0;
+            while (true) {
+                var ofs = dinfo.readUint8();
+                if (ofs == 255) break;
+                if (ofs == 254) {
+                    dinfo.readUint24();
+                    dinfo.readUint16();
+                }
+                if (ofs == 253) {
+                    variableNames[i++] = this.getDSStr(dinfo.readUint24());
+                    dinfo.readUint16();
+                }
+                if (ofs == 252) {
+                    ofs = dinfo.readUint16();
+                }
+            }
+            return variableNames;
         }
 
         private getDSStr(index: number) {

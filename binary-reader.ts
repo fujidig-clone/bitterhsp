@@ -65,15 +65,15 @@
             return v;
         }
 
-        readUInt24(): number {
+        readUint24(): number {
             if (this.littleEndian) {
-                var v = this.view.getInt8(this.cursor)
-                        + 0x100 * this.view.getInt8(this.cursor + 1)
-                        + 0x10000 * this.view.getInt8(this.cursor + 2);
+                var v = this.view.getUint8(this.cursor)
+                        + 0x100 * this.view.getUint8(this.cursor + 1)
+                        + 0x10000 * this.view.getUint8(this.cursor + 2);
             } else {
-                var v = this.view.getInt8(this.cursor + 2)
-                        + 0x100 * this.view.getInt8(this.cursor + 1)
-                        + 0x10000 * this.view.getInt8(this.cursor);
+                var v = this.view.getUint8(this.cursor + 2)
+                        + 0x100 * this.view.getUint8(this.cursor + 1)
+                        + 0x10000 * this.view.getUint8(this.cursor);
             }
             this.cursor += 3;
             return v;
