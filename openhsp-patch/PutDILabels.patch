@@ -1,0 +1,55 @@
+Index: codegen.cpp
+===================================================================
+--- codegen.cpp	(revision 617)
++++ codegen.cpp	(working copy)
+@@ -2610,7 +2610,30 @@
+ 	}
+ }
+ 
++// ラベル名の情報を出力する
++void CToken::PutDILabels( void )
++{
++	int num = ot_buf->GetSize() / sizeof(int);
++	int table[num];
++	std::fill(table, table + num, -1);
++	for (int i = 0; i < lb->GetNumEntry(); i++) {
++		if (lb->GetType(i) == TYPE_LABEL) {
++			int id = lb->GetOpt(i);
++			table[id] = i;
++		}
++	}
++	di_buf->Put((unsigned char)255);
++	di_buf->Put((unsigned char)254);
++	for (int i = 0; i < num; i ++) {
++		if (table[i] == -1) continue;
++		printf("table[%d] = %d\n", i, table[i]);
++		char *name = lb->GetName(table[i]);
++		int dsPos = PutDS(name);
++		PutDI(253, dsPos, i);
++	}
++}
+ 
++
+ char *CToken::GetDS( int ptr )
+ {
+ 	int i;
+@@ -2905,6 +2928,7 @@
+ 		}
+ 		if (( cg_debug )||( cg_putvars )) {
+ 			PutDIVars();
++			PutDILabels();
+ 		}
+ 		PutDI( -1, 0, 0 );								// デバッグ情報終端
+ 
+Index: token.h
+===================================================================
+--- token.h	(revision 617)
++++ token.h	(working copy)
+@@ -175,6 +175,7 @@
+ 	void PutDI( void );
+ 	void PutDI( int dbg_code, int a, int subid );
+ 	void PutDIVars( void );
++	void PutDILabels( void );
+ 	void PutHPI( short flag, short option, char *libname, char *funcname );
+ 	int PutLIB( int flag, char *name );
+ 	void SetLIBIID( int id, char *clsid );
