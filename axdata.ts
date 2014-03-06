@@ -1,6 +1,10 @@
 ﻿///<reference path="binary-reader.ts"/>
 
 module BitterHSP {
+    export interface NumDictionary<V> {
+        [index: number]: V;
+    }
+
     export class AXData {
         version: number;
         max_val: number;
@@ -19,6 +23,10 @@ module BitterHSP {
 
         public tokens: Array<Token>;
         public variableNames: Array<string>;
+        public funcsInfo: Array<FuncInfo>;
+        public prmsInfo: Array<PrmInfo>;
+        public labels: Array<number>;
+        public labelsMap: NumDictionary<Array<number>>;
 
         constructor(private data: string) {
             var r = new BinaryReader(data.substr(0, 96));
@@ -66,6 +74,10 @@ module BitterHSP {
 
             this.tokens = this.createTokens();
             this.variableNames = this.createVariableNames();
+            this.funcsInfo = this.createFuncsInfo();
+            this.prmsInfo = this.createPrmsInfo();
+            this.labels = this.createLabels();
+            this.labelsMap = this.createLabelsMap(this.labels);
         }
 
         private createTokens(): Array<Token> {
@@ -124,6 +136,7 @@ module BitterHSP {
             }
             return tokens;
         }
+        
 
         private createVariableNames() {
             var variableNames = new Array<string>(this.max_val);
@@ -147,6 +160,61 @@ module BitterHSP {
             return variableNames;
         }
 
+        private createFuncsInfo(): Array<FuncInfo> {
+            var funcsInfo = new Array<FuncInfo>();
+            var finfo = new BinaryReader(this.finfo);
+            while(!finfo.isEOS()) {
+                var index = finfo.readInt16();
+                var subid = finfo.readInt16();
+                var prmindex = finfo.readInt32();
+                var prmmax = finfo.readInt32();
+                var nameidx = finfo.readInt32();
+                var size = finfo.readInt32();
+                var otindex = finfo.readInt32();
+                var funcflag = finfo.readInt32();
+                var name = this.getDSStr(nameidx);
+                funcsInfo.push(new FuncInfo(index, subid, prmindex, prmmax,
+                                            nameidx, size, otindex, funcflag, name));
+            }
+            return funcsInfo;
+        }
+
+        private createPrmsInfo(): Array<PrmInfo> {
+            var prmsInfo = new Array<PrmInfo>();
+            var minfo = new BinaryReader(this.minfo);
+            while(!minfo.isEOS()) {
+                var mptype = minfo.readInt16();
+                var subid = minfo.readInt16();
+                var offset = minfo.readInt32();
+                prmsInfo.push(new PrmInfo(mptype, subid, offset));
+            }
+            return prmsInfo;
+        }
+
+        private createLabels(): Array<number> {
+            var p = new BinaryReader(this.ot);
+            var labels = new Array<number>();
+            while(!p.isEOS()) {
+                var pos = p.readInt32();
+                labels.push(pos);
+            }
+            return labels;
+        }
+
+        private createLabelsMap(labels: Array<number>): NumDictionary<Array<number>> {
+            // key: position in cs, val: array of label ids
+            var labelsMap = Object.create(null);
+
+            labels.forEach((x, i) => {
+                if (x in labelsMap) {
+                    labelsMap[x].push(i);
+                } else {
+                    labelsMap[x] = [i];
+                }
+            });
+            return labelsMap;
+        }
+
         private getDSStr(index: number) {
             return AXData.getCStr(this.ds, index);
         }
@@ -163,30 +231,73 @@ module BitterHSP {
     }
     export class Token {
         constructor(public type: number, public ex1: boolean, public ex2: boolean,
-            public code: number, public fileName: string, public lineNumber: number,
-            public pos: number, public size: number, public skipSize: number,
-            public stringValue: string, public doubleValue: number) { }
+                    public code: number, public fileName: string, public lineNumber: number,
+                    public pos: number, public size: number, public skipSize: number,
+                    public stringValue: string, public doubleValue: number) { }
+    }
+
+    export class FuncInfo {
+        constructor(public index: number, public subid: number,
+                    public prmindex: number, public prmmax: number,
+                    public nameidx: number, public size: number,
+                    public otindex: number, public funcflag: number,
+                    public name: string) {}
+    }
+
+    export class PrmInfo {
+        constructor(public mptype: number, public subid: number, public offset: number) {}
     }
 
     enum TokenType {
-        MARK = 0,
-        VAR = 1,
-        STRING = 2,
-        DNUM = 3,
-        INUM = 4,
-        STRUCT = 5,
-        XLABEL = 6,
-        LABEL = 7,
-        INTCMD = 8,
-        EXTCMD = 9,
+        MARK      = 0,
+        VAR       = 1,
+        STRING    = 2,
+        DNUM      = 3,
+        INUM      = 4,
+        STRUCT    = 5,
+        XLABEL    = 6,
+        LABEL     = 7,
+        INTCMD    = 8,
+        EXTCMD    = 9,
         EXTSYSVAR = 10,
-        CMPCMD = 11,
-        MODCMD = 12,
-        INTFUNC = 13,
-        SYSVAR = 14,
-        PROGCMD = 15,
-        DLLFUNC = 16,
-        DLLCTRL = 17,
-        USERDEF = 18,
+        CMPCMD    = 11,
+        MODCMD    = 12,
+        INTFUNC   = 13,
+        SYSVAR    = 14,
+        PROGCMD   = 15,
+        DLLFUNC   = 16,
+        DLLCTRL   = 17,
+        USERDEF   = 18,
+    }
+
+
+    export enum MPType {
+        NONE        = 0,
+        VAR         = 1,
+        STRING      = 2,
+        DNUM        = 3,
+        INUM        = 4,
+        STRUCT      = 5,
+        LABEL       = 7,
+        LOCALVAR    = -1,
+        ARRAYVAR    = -2,
+        SINGLEVAR   = -3,
+        FLOAT       = -4,
+        STRUCTTAG   = -5,
+        LOCALSTRING = -6,
+        MODULEVAR   = -7,
+        PPVAL       = -8,
+        PBMSCR      = -9,
+        PVARPTR     = -10,
+        IMODULEVAR  = -11,
+        IOBJECTVAR  = -12,
+        LOCALWSTR   = -13,
+        FLEXSPTR    = -14,
+        FLEXWPTR    = -15,
+        PTR_REFSTR  = -16,
+        PTR_EXINFO  = -17,
+        PTR_DPMINFO = -18,
+        NULLPTR     = -19,
+        TMODULEVAR  = -20,
     }
 }
