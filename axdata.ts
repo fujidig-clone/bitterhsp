@@ -23,6 +23,7 @@ module BitterHSP {
 
         public tokens: Array<Token>;
         public variableNames: Array<string>;
+        public labelNames: Array<string>;
         public funcsInfo: Array<FuncInfo>;
         public prmsInfo: Array<PrmInfo>;
         public labels: Array<number>;
@@ -73,7 +74,7 @@ module BitterHSP {
             this.hpidat = data.substr(pt_hpidat, max_hpi);
 
             this.tokens = this.createTokens();
-            this.variableNames = this.createVariableNames();
+            this.createSymbolNames();
             this.funcsInfo = this.createFuncsInfo();
             this.prmsInfo = this.createPrmsInfo();
             this.labels = this.createLabels();
@@ -136,11 +137,16 @@ module BitterHSP {
             }
             return tokens;
         }
-        
 
-        private createVariableNames() {
-            var variableNames = new Array<string>(this.max_val);
+        private createSymbolNames() {
             var dinfo = new BinaryReader(this.dinfo);
+            this.variableNames = this.createVariableNames(dinfo);
+            this.labelNames = this.createLabelNames(dinfo);
+        }
+
+        private createVariableNames(dinfo: BinaryReader): Array<string> {
+            var variableNames = new Array<string>(this.max_val);
+            console.log([].map.call(this.dinfo.slice(dinfo.cursor), (x)=>x.charCodeAt(0)));
             var i = 0;
             while (true) {
                 var ofs = dinfo.readUint8();
@@ -158,6 +164,21 @@ module BitterHSP {
                 }
             }
             return variableNames;
+        }
+
+        private createLabelNames(dinfo: BinaryReader): Array<string> {
+            var labelNames = new Array<string>(this.ot.length / 4);
+            if (dinfo.readUint8() != 254) return [];
+            while (true) {
+                var ofs = dinfo.readUint8();
+                console.log(ofs);
+                if (ofs == 255) break;
+                if (ofs != 253) return [];
+                var dsPos = dinfo.readUint24();
+                var i = dinfo.readUint16();
+                labelNames[i] = this.getDSStr(dsPos);
+            }
+            return labelNames;
         }
 
         private createFuncsInfo(): Array<FuncInfo> {
