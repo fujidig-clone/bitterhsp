@@ -1,9 +1,12 @@
+///<reference path="axdata.ts"/>
+//
 module BitterHSP {
     export class Compiler {
         private tokensPos = 0;
         private labels: Array<Label>;
         private ifLabels: NumDictionary<V> = Object.create(null);
         private userDefFuncs: Array<UserDefFunc> = [];
+        private modules: Array<Module> = [];
         
         constructor(private ax: AXData) {
             this.labels = []; // HSP のラベルIDに対応したラベル
@@ -62,7 +65,7 @@ module BitterHSP {
             }
             return sequence;
         }
-        private pushNewInsn(sequence: Array<Insn>, code: InsnCode, opts: any, token?: Token) {
+        private pushNewInsn(sequence: Array<Insn>, code: InsnCode, opts: Array<any>, token?: Token) {
             token || (token = this.ax.tokens[this.tokensPos]);
             sequence.push(new Insn(code, opts, token.fileName, token.lineNo));
         }
@@ -80,10 +83,10 @@ module BitterHSP {
             token || (token = this.ax.tokens[this.tokensPos]);
             return new CompileError(message, token.fileName, token.lineNo);
         }
-        private compileAssignment(sequence) {
+        private compileAssignment(sequence: Array<Insn>) {
             var varToken = this.ax.tokens[this.tokensPos];
-            var insnCode;
-            var opts;
+            var insnCode: number;
+            var opts: Array<any>;
             switch(varToken.type) {
             case TokenType.VAR:
                 this.tokensPos ++;
@@ -99,24 +102,24 @@ module BitterHSP {
                 var prmInfo = this.ax.prmsInfo[varToken.code];
                 var funcInfo = this.ax.funcsInfo[this.getFinfoIdByMinfoId(varToken.code)];
                 switch(proxyVarType) {
-                case Compiler.ProxyVarType.THISMOD:
+                case ProxyVarType.THISMOD:
                     insnCode = 0;
                     opts = [];
                     this.compileProxyVariable(sequence);
                     break;
-                case Compiler.ProxyVarType.MEMBER:
+                case ProxyVarType.MEMBER:
                     insnCode = 3;
                     this.tokensPos ++;
                     var indicesCount = this.compileVariableSubscript(sequence);
                     opts = [varToken.code - funcInfo.prmindex - 1, indicesCount];
                     break;
-                case Compiler.ProxyVarType.ARG_VAR:
+                case ProxyVarType.ARG_VAR:
                     insnCode = 0;
                     opts = [];
                     this.compileProxyVariable(sequence);
                     break;
-                case Compiler.ProxyVarType.ARG_ARRAY:
-                case Compiler.ProxyVarType.ARG_LOCAL:
+                case ProxyVarType.ARG_ARRAY:
+                case ProxyVarType.ARG_LOCAL:
                     insnCode = 2;
                     this.tokensPos ++;
                     var indicesCount = this.compileVariableSubscript(sequence);
@@ -159,7 +162,7 @@ module BitterHSP {
             }
             this.pushNewInsn(sequence, InsnCode.ASSIGN + insnCode, opts.concat([argc]), token);
         }
-        private compileProgramCommand(sequence) {
+        private compileProgramCommand(sequence: Array<Insn>) {
             var token = this.ax.tokens[this.tokensPos];
             switch(token.code) {
             case 0x00: // goto
@@ -216,7 +219,7 @@ module BitterHSP {
                 if(labelToken.type != TokenType.LABEL) {
                     throw this.error();
                 }
-                var argc;
+                var argc: number;
                 if(this.ax.tokens[this.tokensPos].ex2) {
                     this.pushNewInsn(sequence, InsnCode.PUSH,
                                      [new IntValue(-1)], token);
@@ -298,42 +301,6 @@ module BitterHSP {
                 break;
             case 0x18: // exgoto
                 this.tokensPos ++;
-                // exgoto <添字指定のない静的変数>, p2, p3, <ラベルリテラル> を最適化
-                var pos = this.tokensPos;
-                var varToken = this.ax.tokens[pos];
-                if(!varToken.ex1 && !varToken.ex2 &&
-                   varToken.type == TokenType.VAR && this.ax.tokens[pos + 1].ex2) {
-                    pos ++;
-                    var secondParamPos = pos;
-                    pos += this.skipParameter(pos);
-                    var thirdParamPos = pos;
-                    pos += this.skipParameter(pos);
-                    var labelToken = this.ax.tokens[pos];
-                    if(labelToken && !labelToken.ex1 &&
-                       labelToken.type == TokenType.LABEL && this.ax.tokens[pos+1]) {
-                        // p2 が整数リテラルの場合はさらに最適化
-                        if(secondParamPos + 1 == thirdParamPos && this.ax.tokens[secondParamPos].type == TokenType.INUM) {
-                            this.tokensPos = thirdParamPos;
-                            this.compileParameter(sequence);
-                            if(this.ax.tokens[secondParamPos].code >= 0) {
-                                this.pushNewInsn(sequence, InsnCode.EXGOTO_OPT2,
-                                                 [varToken.code, this.labels[labelToken.code]], token);
-                            } else {
-                                this.pushNewInsn(sequence, InsnCode.EXGOTO_OPT3,
-                                                 [varToken.code, this.labels[labelToken.code]], token);
-                            }
-                            this.tokensPos = pos + 1;
-                            break;
-                        }
-                        this.tokensPos = secondParamPos;
-                        this.compileParameter(sequence);
-                        this.compileParameter(sequence);
-                        this.pushNewInsn(sequence, InsnCode.EXGOTO_OPT1,
-                                         [varToken.code, this.labels[labelToken.code]], token);
-                        this.tokensPos = pos + 1;
-                        break;
-                    }
-                }
                 var argc = this.compileParameters(sequence);
                 if(argc != 4) throw this.error('exgoto の引数の数が違います', token);
                 this.pushNewInsn(sequence, InsnCode.EXGOTO, [], token);
@@ -358,7 +325,7 @@ module BitterHSP {
                 this.compileCommand(sequence);
             }
         }
-        private compileBasicCommand(sequence) {
+        private compileBasicCommand(sequence: Array<Insn>) {
             var token = this.ax.tokens[this.tokensPos];
             switch(token.code) {
             case 0x00: // onexit
@@ -376,7 +343,7 @@ module BitterHSP {
                 this.compileCommand(sequence);
             }
         }
-        private compileGuiCommand(sequence) {
+        private compileGuiCommand(sequence: Array<Insn>) {
             var token = this.ax.tokens[this.tokensPos];
             switch(token.code) {
             case 0x00: // button
@@ -390,13 +357,13 @@ module BitterHSP {
                 this.compileCommand(sequence);
             }
         }
-        private compileCommand(sequence) {
+        private compileCommand(sequence: Array<Insn>) {
             var token = this.ax.tokens[this.tokensPos++];
             var argc = this.compileParameters(sequence);
             this.pushNewInsn(sequence, InsnCode.CALL_BUILTIN_CMD,
                              [token.type, token.code, argc], token);
         }
-        private compileBranchCommand(sequence) {
+        private compileBranchCommand(sequence: Array<Insn>) {
             var token = this.ax.tokens[this.tokensPos++];
             var skipTo = token.pos + token.size + token.skipOffset;
             var label = new Label;
@@ -408,23 +375,13 @@ module BitterHSP {
             var argc = this.compileParameters(sequence, true, true);
             if(token.code == 0) { // 'if'
                 if(argc != 1) throw this.error("if の引数の数が間違っています。", token);
-                // if の条件式がリテラルのとき最適化
-                var lastInsn = sequence[sequence.length - 1];
-                if(lastInsn.code == InsnCode.PUSH &&
-                   (lastInsn.opts[0].getType() == VarType.INT || lastInsn.opts[0].getType() == VarType.DOUBLE)) {
-                    sequence.pop();
-                    if(!lastInsn.opts[0]._value) {
-                        this.pushNewInsn(sequence, InsnCode.GOTO, [label], token);
-                    }
-                    return;
-                }
                 this.pushNewInsn(sequence, InsnCode.IFEQ, [label], token);
             } else {
                 if(argc != 0) throw this.error("else の引数の数が間違っています。", token);
                 this.pushNewInsn(sequence, InsnCode.GOTO, [label], token);
             }
         }
-        private compileParameters(sequence, cannotBeOmitted, notReceiveVar) {
+        private compileParameters(sequence, cannotBeOmitted, notReceiveVar): number {
             var argc = 0;
             if(this.ax.tokens[this.tokensPos].ex2) {
                 if(cannotBeOmitted) {
@@ -436,7 +393,7 @@ module BitterHSP {
             argc += this.compileParametersSub(sequence, cannotBeOmitted, notReceiveVar);
             return argc;
         }
-        private compileParametersSub(sequence, cannotBeOmitted, notReceiveVar) {
+        private compileParametersSub(sequence, cannotBeOmitted, notReceiveVar): number {
             var argc = 0;
             while(true) {
                 var token = this.ax.tokens[this.tokensPos];
@@ -469,7 +426,7 @@ module BitterHSP {
         戻り値: パラメータが単一の変数であり、
                 変数を積む命令を生成したとき true 、そうでないとき false
         */
-        private compileParameter(sequence, notReceiveVar) {
+        private compileParameter(sequence: Array<Insn>, notReceiveVar: bool): boolean {
             var headPos = this.tokensPos;
             var usedPushVar = false;
             while(true) {
@@ -533,14 +490,14 @@ module BitterHSP {
                 if(token && token.ex2) return usedPushVar;
             }
         }
-        private isOnlyVar(pos, headPos) {
+        private isOnlyVar(pos: number, headPos: number): boolean {
             if(pos != headPos) return false;
             var nextTokenPos = pos + 1;
             nextTokenPos += this.skipParenAndParameters(nextTokenPos);
             var nextToken = this.ax.tokens[nextTokenPos];
             return (!nextToken || nextToken.ex1 || nextToken.ex2 || this.isRightParenToken(nextToken));
         }
-        private skipParameter(pos) {
+        private skipParameter(pos: number): number {
             var size = 0;
             var parenLevel = 0;
             while(true) {
@@ -567,7 +524,7 @@ module BitterHSP {
                 }
             }
         }
-        private skipParameters(pos) {
+        private skipParameters(pos: number): number;
             var skipped = 0;
             var size = 0;
             while((skipped = this.skipParameter(pos + size))) {
@@ -575,7 +532,7 @@ module BitterHSP {
             }
             return size;
         }
-        private skipParenAndParameters(pos) {
+        private skipParenAndParameters(pos: number): number {
             var parenToken = this.ax.tokens[pos];
             if(!(parenToken && parenToken.type == TokenType.MARK && parenToken.code == 40)) {
                 return 0;
@@ -588,51 +545,15 @@ module BitterHSP {
             }
             return size + 1;
         }
-        private compileOperator(sequence) {
+        private compileOperator(sequence: Array<Insn>) {
             var token = this.ax.tokens[this.tokensPos++];
             if(!(0 <= token.code && token.code < 16)) {
                 throw this.error("演算子コード " + token.code + " は解釈できません。", token);
             }
             var len = sequence.length;
-            // リテラル同士の演算の最適化 ex. 1 + 1 -> 2
-            if(len >= 2 &&
-               sequence[len-2].code == InsnCode.PUSH &&
-               sequence[len-1].code == InsnCode.PUSH &&
-               sequence[len-2].opts[0] && sequence[len-1].opts[0]) {
-                var lhs = sequence[len-2].opts[0], rhs = sequence[len-1].opts[0];
-                try {
-                    var result = this.operate(lhs, rhs, token.code);
-                    sequence.length -= 2;
-                    this.pushNewInsn(sequence, InsnCode.PUSH, [result], token);
-                    return;
-                } catch(e) {
-                    if(!(e instanceof HSPError)) throw e;
-                }
-            }
             this.pushNewInsn(sequence, InsnCode.ADD + token.code, [], token);
         }
-        private operate(lhs, rhs, calcCode) {
-            switch(calcCode) {
-            case  0: return lhs.add(rhs);
-            case  1: return lhs.sub(rhs);
-            case  2: return lhs.mul(rhs);
-            case  3: return lhs.div(rhs);
-            case  4: return lhs.mod(rhs);
-            case  5: return lhs.and(rhs);
-            case  6: return lhs.or(rhs);
-            case  7: return lhs.xor(rhs);
-            case  8: return lhs.eq(rhs);
-            case  9: return lhs.ne(rhs);
-            case 10: return lhs.gt(rhs);
-            case 11: return lhs.lt(rhs);
-            case 12: return lhs.gteq(rhs);
-            case 13: return lhs.lteq(rhs);
-            case 14: return lhs.rsh(rhs);
-            case 15: return lhs.lsh(rhs);
-            default:  throw new Error('must not happen');
-            }
-        }
-        private compileExtSysvar(sequence) {
+        private compileExtSysvar(sequence: Array<Insn>) {
             var token = this.ax.tokens[this.tokensPos];
             if(token.code >= 0x100) {
                 this.compileFuncall(sequence);
@@ -640,7 +561,7 @@ module BitterHSP {
                 this.compileSysvar(sequence);
             }
         }
-        private compileStruct(sequence, useGetVar) {
+        private compileStruct(sequence: Array<Insn>, useGetVar: boolean): boolean {
             var token = this.ax.tokens[this.tokensPos];
             var prmInfo = this.ax.prmsInfo[token.code];
             var usedPushVar = this.compileProxyVariable(sequence, useGetVar);
@@ -651,7 +572,7 @@ module BitterHSP {
             }
             return usedPushVar;
         }
-        private compileSysvar(sequence) {
+        private compileSysvar(sequence: Array<Insn>) {
             var token = this.ax.tokens[this.tokensPos++];
             if(token.type == TokenType.SYSVAR && token.code == 0x04) {
                 this.pushNewInsn(sequence, InsnCode.CNT, [], token);
@@ -660,7 +581,7 @@ module BitterHSP {
             this.pushNewInsn(sequence, InsnCode.CALL_BUILTIN_FUNC,
                              [token.type, token.code, 0], token);
         }
-        private compileOptionalJumpType(sequence) {
+        private compileOptionalJumpType(sequence: Array<Insn>) {
             var token = this.ax.tokens[this.tokensPos];
             if(token.type == TokenType.PROGCMD && token.val == 0) {
                 this.pushNewInsn(sequence, InsnCode.PUSH, [JumpType.GOTO], token);
@@ -672,37 +593,37 @@ module BitterHSP {
                 this.pushNewInsn(sequence, InsnCode.PUSH, [JumpType.GOTO], token);
             }
         }
-        private compileUserDefFuncall(sequence) {
+        private compileUserDefFuncall(sequence: Array<Insn>) {
             var token = this.ax.tokens[this.tokensPos++];
             var userDefFunc = this.getUserDefFunc(token.code);
             var paramsInfo = this.compileUserDefFuncall0(sequence, userDefFunc, true, true);
             this.pushNewInsn(sequence, InsnCode.CALL_USERDEF_FUNC,
                              [userDefFunc, paramsInfo], token);
         }
-        private compileUserDefCommand(sequence) {
+        private compileUserDefCommand(sequence: Array<Insn>) {
             var token = this.ax.tokens[this.tokensPos++];
             var userDefFunc = this.getUserDefFunc(token.code);
             var paramsInfo = this.compileUserDefFuncall0(sequence, userDefFunc, false, true);
             this.pushNewInsn(sequence, InsnCode.CALL_USERDEF_CMD,
                              [userDefFunc, paramsInfo], token);
         }
-        private compileUserDefFuncall0(sequence, userDefFunc, isCType, isHead) {
+        private compileUserDefFuncall0(sequence: Array<Insn>, userDefFunc: UserDefFunc, isCType: boolean, isHead: boolean): any {
             var argsCount = 0;
-            var paramTypes = [];
-            var paramVals = [];
-            function nextMPType() {
+            var paramTypes: Array<ParamType> = [];
+            var paramVals: Array<any>  = [];
+            function nextMPType(): MPType {
                 do {
                     var mptype = userDefFunc.paramTypes[argsCount++];
                 } while(mptype == MPType.LOCALVAR);
                 return mptype;
             }
-            function push(type, val) {
+            function push(type: ParamType, val: any) {
                 paramTypes.push(type);
                 paramVals.push(val);
             }
             if(isHead && isCType) this.compileLeftParen(sequence);
             if(isHead && this.ax.tokens[this.tokensPos].ex2) {
-                push(Compiler.ParamType.OMMITED, null);
+                push(ParamType.OMMITED, null);
                 nextMPType();
             }
             while(true) {
@@ -711,7 +632,7 @@ module BitterHSP {
                 if(token.type == TokenType.MARK) {
                     if(token.code == 63) { // '?'
                         this.tokensPos ++;
-                        push(Compiler.ParamType.OMMITED, null);
+                        push(ParamType.OMMITED, null);
                         nextMPType();
                         continue;
                     }
@@ -723,68 +644,77 @@ module BitterHSP {
                 if(mptype == MPType.ARRAYVAR) {
                     if((token.type == TokenType.VAR || token.type == TokenType.STRUCT) &&
                        this.isOnlyVar(this.tokensPos, this.tokensPos)) {
-                        push(Compiler.ParamType.VARIABLE, this.getVariableData(sequence));
+                        push(ParamType.VARIABLE, this.getVariableData(sequence));
                     } else {
                         this.compileParameter(sequence, false);
-                        push(Compiler.ParamType.VALUE, null);
+                        push(ParamType.VALUE, null);
                     }
                     continue;
                 }
                 var notReceiveVar = mptype != MPType.SINGLEVAR && mptype != MPType.MODULEVAR;
                 var usedPushVar = this.compileParameter(sequence, notReceiveVar);
-                var literal = null;
+                var literal: any = null;
                 var insn = sequence[sequence.length - 1];
                 if(insn.code == InsnCode.PUSH) {
                     literal = insn.opts[0];
-                    -- sequence.length;
+                    sequence.pop();
                 }
-                push(usedPushVar ? Compiler.ParamType.VARIABLE : Compiler.ParamType.VALUE, literal);
+                push(usedPushVar ? ParamType.VARIABLE : ParamType.VALUE, literal);
             }
             if(isCType) this.compileRightParen(sequence);
             return [paramTypes, paramVals];
         }
-        private getUserDefFunc(finfoId) {
+        private getUserDefFunc(finfoId: number): UserDefFunc {
             var func = this.userDefFuncs[finfoId];
             if(func) return func;
             var funcInfo = this.ax.funcsInfo[finfoId];
-            if(funcInfo.index == -3) { // STRUCTDAT_INDEX_STRUCT
-                var destructor = funcInfo.otindex != 0 ? this.getUserDefFunc(funcInfo.otindex) : null;
-                var constructorFinfoId = this.ax.prmsInfo[funcInfo.prmindex].offset;
-                var constructor = constructorFinfoId != -1 ? this.getUserDefFunc(constructorFinfoId) : null;
-                return this.userDefFuncs[finfoId] = new Module(funcInfo.name, constructor, destructor, funcInfo.prmmax - 1, finfoId);
+            if (funcInfo.index != -1 && funcInfo.index != -2) { // STRUCTDAT_INDEX_FUNC, STRUCTDAT_INDEX_CFUNC
+                return null;
             }
-            var isCType = funcInfo.index == -2; // STRUCTDAT_INDEX_CFUNC
-            var paramTypes = [];
+            var isCType = funcInfo.index == -2;
+            var paramTypes: Array<MPType> = [];
             for(var i = 0; i < funcInfo.prmmax; i ++) {
                 paramTypes[i] = this.ax.prmsInfo[funcInfo.prmindex + i].mptype;
             }
             return this.userDefFuncs[finfoId] = new UserDefFunc(isCType, funcInfo.name, this.labels[funcInfo.otindex], paramTypes, finfoId);
         }
-        private compileFuncall(sequence) {
+        private getModule(finfoId: number): Module {
+            var module = this.modules[finfoId];
+            if(module) return module;
+            var funcInfo = this.ax.funcsInfo[finfoId];
+            if(funcInfo.index != -3) { // STRUCTDAT_INDEX_STRUCT
+                return null;
+            }
+            var destructor = funcInfo.otindex != 0 ? this.getUserDefFunc(funcInfo.otindex) : null;
+            var constructorFinfoId = this.ax.prmsInfo[funcInfo.prmindex].offset;
+            var constructor = constructorFinfoId != -1 ? this.getUserDefFunc(constructorFinfoId) : null;
+            return this.modules[finfoId] = new Module(funcInfo.name, constructor, destructor, funcInfo.prmmax - 1, finfoId);
+        }
+        private compileFuncall(sequence: Array<Insn>) {
             var token = this.ax.tokens[this.tokensPos++];
             var argc = this.compileParenAndParameters(sequence);
             this.pushNewInsn(sequence, InsnCode.CALL_BUILTIN_FUNC,
                              [token.type, token.code, argc], token);
         }
-        private compileParenAndParameters(sequence) {
+        private compileParenAndParameters(sequence: Array<Insn>): number {
             this.compileLeftParen(sequence);
             var argc = this.compileParameters(sequence);
             this.compileRightParen(sequence);
             return argc;
         }
-        private compileLeftParen(sequence) {
+        private compileLeftParen(sequence: Array<Insn>) {
             var parenToken = this.ax.tokens[this.tokensPos++];
             if(!(parenToken && parenToken.type == TokenType.MARK && parenToken.code == 40)) {
                 throw this.error('関数名の後ろに開き括弧がありません。', parenToken);
             }
         }
-        private compileRightParen(sequence) {
+        private compileRightParen(sequence: Array<Insn>) {
             var parenToken = this.ax.tokens[this.tokensPos++];
             if(!(parenToken && parenToken.type == TokenType.MARK && parenToken.code == 41)) {
                 throw this.error('関数パラメータの後ろに閉じ括弧がありません。', parenToken);
             }
         }
-        private compileVariable(sequence) {
+        private compileVariable(sequence: Array<Insn>) {
             switch(this.ax.tokens[this.tokensPos].type) {
             case TokenType.VAR:
                 this.compileStaticVariable(sequence);
@@ -794,32 +724,32 @@ module BitterHSP {
             }
             throw this.error('変数が指定されていません');
         }
-        private compileStaticVariable(sequence, useGetVar) {
+        private compileStaticVariable(sequence: Array<Insn>, useGetVar = false) {
             var token = this.ax.tokens[this.tokensPos++];
             var argc = this.compileVariableSubscript(sequence);
             this.pushNewInsn(sequence, useGetVar ? InsnCode.GET_VAR : InsnCode.PUSH_VAR,
                              [token.code, argc], token);
         }
-        private compileProxyVariable(sequence, useGetVar) {
+        private compileProxyVariable(sequence: Array<Insn>, useGetVar = false): boolean {
             var proxyVarType = this.getProxyVarType();
             var token = this.ax.tokens[this.tokensPos++];
             var prmInfo = this.ax.prmsInfo[token.code];
             var funcInfo = this.ax.funcsInfo[this.getFinfoIdByMinfoId(token.code)];
             switch(proxyVarType) {
-            case Compiler.ProxyVarType.THISMOD:
+            case ProxyVarType.THISMOD:
                 this.pushNewInsn(sequence, InsnCode.THISMOD, [], token);
                 return true;
-            case Compiler.ProxyVarType.MEMBER:
+            case ProxyVarType.MEMBER:
                 var argc = this.compileVariableSubscript(sequence);
                 this.pushNewInsn(sequence, useGetVar ? InsnCode.GET_MEMBER : InsnCode.PUSH_MEMBER,
                                  [token.code - funcInfo.prmindex - 1, argc], token);
                 return useGetVar;
-            case Compiler.ProxyVarType.ARG_VAR:
+            case ProxyVarType.ARG_VAR:
                 this.pushNewInsn(sequence, InsnCode.GETARG,
                                  [token.code - funcInfo.prmindex], token);
                 return true;
-            case Compiler.ProxyVarType.ARG_ARRAY:
-            case Compiler.ProxyVarType.ARG_LOCAL:
+            case ProxyVarType.ARG_ARRAY:
+            case ProxyVarType.ARG_LOCAL:
                 var argc = this.compileVariableSubscript(sequence);
                 this.pushNewInsn(sequence, useGetVar ? InsnCode.GET_ARG_VAR : InsnCode.PUSH_ARG_VAR,
                                  [token.code - funcInfo.prmindex, argc], token);
@@ -828,7 +758,7 @@ module BitterHSP {
                 return null;
             }
         }
-        private getVariableData(sequence) {
+        private getVariableData(sequence: Array<Insn>): any {
             var token = this.ax.tokens[this.tokensPos];
             var result = this.getVariableData0();
             this.tokensPos ++;
@@ -838,22 +768,22 @@ module BitterHSP {
             }
             return result;
         }
-        private getVariableDataNoSubscript() {
+        private getVariableDataNoSubscript(): any {
             var result = this.getVariableData0();
             if(this.isLeftParenToken(this.ax.tokens[++this.tokensPos])) {
                 throw this.error('変数の添字は指定できません');
             }
             return result;
         }
-        private getVariableData0() {
+        private getVariableData0(): any {
             var token = this.ax.tokens[this.tokensPos];
             var result;
             if(token.type == TokenType.VAR) {
-                return [Compiler.ProxyVarType.STATIC, token.code];
+                return [ProxyVarType.STATIC, token.code];
             } else if(token.type == TokenType.STRUCT) {
                 var type = this.getProxyVarType();
                 var funcInfo = this.ax.funcsInfo[this.getFinfoIdByMinfoId(token.code)];
-                if(type == Compiler.ProxyVarType.MEMBER) {
+                if(type == ProxyVarType.MEMBER) {
                     return [type, token.code - funcInfo.prmindex - 1];
                 } else {
                     return [type, token.code - funcInfo.prmindex];
@@ -868,33 +798,33 @@ module BitterHSP {
                 if(this.isLeftParenToken(this.ax.tokens[this.tokensPos + 1])) {
                     throw this.error('thismod に添字を指定しています');
                 }
-                return Compiler.ProxyVarType.THISMOD;
+                return ProxyVarType.THISMOD;
             }
             var prmInfo = this.ax.prmsInfo[token.code];
             if(prmInfo.subid >= 0) {
-                return Compiler.ProxyVarType.MEMBER;
+                return ProxyVarType.MEMBER;
             }
             switch(prmInfo.mptype) {
             case MPType.LOCALVAR:
-                return Compiler.ProxyVarType.ARG_LOCAL;
+                return ProxyVarType.ARG_LOCAL;
             case MPType.ARRAYVAR:
-                return Compiler.ProxyVarType.ARG_ARRAY;
+                return ProxyVarType.ARG_ARRAY;
             case MPType.SINGLEVAR:
                 if(this.isLeftParenToken(this.ax.tokens[this.tokensPos + 1])) {
                     throw this.error('パラメータタイプ var の変数に添字を指定しています');
                 }
-                return Compiler.ProxyVarType.ARG_VAR;
+                return ProxyVarType.ARG_VAR;
             default:
                 return null;
             }
         }
-        private isLeftParenToken(token) {
+        private isLeftParenToken(token: Token) {
             return token && token.type == TokenType.MARK && token.code == 40;
         }
-        private isRightParenToken(token) {
+        private isRightParenToken(token: Token) {
             return token && token.type == TokenType.MARK && token.code == 41;
         }
-        private compileVariableSubscript(sequence) {
+        private compileVariableSubscript(sequence: Array<Insn>): number {
             var argc = 0;
             var parenToken = this.ax.tokens[this.tokensPos];
             if(parenToken && parenToken.type == TokenType.MARK && parenToken.code == 40) {
@@ -918,6 +848,14 @@ module BitterHSP {
 
     class Label {
         consturctor(public pos: number) {}
+    }
+
+    class UserDefFunc {
+        constructor(public isCType: boolean, public name: string, public label: Label, public paramTypes: Array<MPType>, public id: number) {}
+    }
+
+    class Module {
+        constructor(public name: string, public constructor: UserDefFunc, public destructor: UserDefFunc, public membersCount: number, public id: number) {}
     }
 
     enum InsnCode {
@@ -992,6 +930,21 @@ module BitterHSP {
         EXGOTO_OPT2,
         EXGOTO_OPT3,
         ON,
+    }
+
+    enum ProxyVarType {
+        STATIC,
+        THISMOD,
+        MEMBER,
+        ARG_VAR,
+        ARG_ARRAY,
+        ARG_LOCAL,
+    }
+
+    enum ParamType {
+        OMMITED,
+        VARIABLE,
+        VALUE,
     }
 
     class CompileError {
