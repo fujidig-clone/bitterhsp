@@ -170,7 +170,6 @@ module BitterHSP {
             if (dinfo.readUint8() != 254) return [];
             while (true) {
                 var ofs = dinfo.readUint8();
-                console.log(ofs);
                 if (ofs == 255) break;
                 if (ofs != 253) return [];
                 var dsPos = dinfo.readUint24();

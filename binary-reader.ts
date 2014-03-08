@@ -11,7 +11,7 @@
 
         private static makeBuffer(str: string): ArrayBuffer {
             var length = str.length;
-            var buf = new ArrayBuffer(length);
+            var buf = new ArrayBuffer(Math.max(length, 1));
             var bufView = new Uint8Array(buf);
             for (var i = 0; i < length; i++) {
                 bufView[i] = str.charCodeAt(i);

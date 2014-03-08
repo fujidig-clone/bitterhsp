@@ -15,7 +15,7 @@ module BitterHSP {
             }
         }
 
-        private compile(): Array<Insn> {
+        public compile(): Array<Insn> {
             var sequence: Array<Insn> = [];
             while(this.tokensPos < this.ax.tokens.length) {
                 var token = this.ax.tokens[this.tokensPos];
@@ -841,24 +841,24 @@ module BitterHSP {
         }
     }
 
-    class Insn {
+    export class Insn {
         constructor(public code: InsnCode, public opts: any, public fileName: string, public lineNo: number) {}
     }
 
-    class Label {
+    export class Label {
         public pos: number = null;
         constructor() {}
     }
 
-    class UserDefFunc {
+    export class UserDefFunc {
         constructor(public isCType: boolean, public name: string, public label: Label, public paramTypes: Array<MPType>, public id: number) {}
     }
 
-    class Module {
+    export class Module {
         constructor(public name: string, public constructor: UserDefFunc, public destructor: UserDefFunc, public membersCount: number, public id: number) {}
     }
 
-    enum InsnCode {
+    export enum InsnCode {
         NOP,
         PUSH,
         PUSH_DEFAULT,
@@ -932,7 +932,7 @@ module BitterHSP {
         ON,
     }
 
-    enum ProxyVarType {
+    export enum ProxyVarType {
         STATIC,
         THISMOD,
         MEMBER,
@@ -941,13 +941,13 @@ module BitterHSP {
         ARG_LOCAL,
     }
 
-    enum ParamType {
+    export enum ParamType {
         OMMITED,
         VARIABLE,
         VALUE,
     }
 
-    class CompileError {
+    export class CompileError {
         constructor(public message: string, public hspFileName: string, public hspLineNumber: number) {}
     }
 }
