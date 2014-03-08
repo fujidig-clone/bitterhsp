@@ -7,4 +7,8 @@
 var fs = require("fs");
 var binary = fs.readFileSync("hsp-programs/hello/hello.ax").toString("binary");
 var axdata = new BitterHSP.AXData(binary);
-console.log(new BitterHSP.Compiler(axdata).compile());
+var sequence = new BitterHSP.Compiler(axdata).compile();
+
+sequence.forEach((insn) => {
+    console.log(BitterHSP.InsnCode[insn.code], insn.opts);
+});
