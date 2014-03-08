@@ -197,10 +197,10 @@ module BitterHSP {
                 var existReturnValue = !this.ax.tokens[this.tokensPos].ex1;
                 var usedPushVar: boolean = null;
                 if(existReturnValue) {
-                    usedPushVar = this.compileParameter(sequence, true);
+                    this.compileParameter(sequence, true);
                     if(this.compileParametersSub(sequence) > 0) throw this.error('return の引数が多すぎます', token);
                 }
-                this.pushNewInsn(sequence, InsnCode.RETURN, [existReturnValue, usedPushVar], token);
+                this.pushNewInsn(sequence, InsnCode.RETURN, [existReturnValue], token);
                 break;
             case 0x03: // break
                 this.tokensPos ++;
@@ -653,12 +653,6 @@ module BitterHSP {
                 }
                 var notReceiveVar = mptype != MPType.SINGLEVAR && mptype != MPType.MODULEVAR;
                 var usedPushVar = this.compileParameter(sequence, notReceiveVar);
-                var literal: any = null;
-                var insn = sequence[sequence.length - 1];
-                if(insn.code == InsnCode.PUSH) {
-                    literal = insn.opts[0];
-                    sequence.pop();
-                }
                 push(usedPushVar ? ParamType.VARIABLE : ParamType.VALUE, literal);
             }
             if(isCType) this.compileRightParen(sequence);
