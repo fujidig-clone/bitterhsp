@@ -4,7 +4,7 @@ module BitterHSP {
     export class Compiler {
         private tokensPos = 0;
         private labels: Array<Label>;
-        private ifLabels: NumDictionary<V> = Object.create(null);
+        private ifLabels: NumDictionary<Array<Label>> = Object.create(null);
         private userDefFuncs: Array<UserDefFunc> = [];
         private modules: Array<Module> = [];
         
@@ -67,7 +67,7 @@ module BitterHSP {
         }
         private pushNewInsn(sequence: Array<Insn>, code: InsnCode, opts: Array<any>, token?: Token) {
             token || (token = this.ax.tokens[this.tokensPos]);
-            sequence.push(new Insn(code, opts, token.fileName, token.lineNo));
+            sequence.push(new Insn(code, opts, token.fileName, token.lineNumber));
         }
         private getFinfoIdByMinfoId(minfoId: number): number {
             var funcsInfo = this.ax.funcsInfo;
@@ -79,9 +79,9 @@ module BitterHSP {
             }
             return null;
         }
-        private error(message: string, token?: Token): CompileError {
+        private error(message = "", token?: Token): CompileError {
             token || (token = this.ax.tokens[this.tokensPos]);
-            return new CompileError(message, token.fileName, token.lineNo);
+            return new CompileError(message, token.fileName, token.lineNumber);
         }
         private compileAssignment(sequence: Array<Insn>) {
             var varToken = this.ax.tokens[this.tokensPos];
@@ -195,9 +195,9 @@ module BitterHSP {
                 this.tokensPos ++;
                 if(this.ax.tokens[this.tokensPos].ex2) throw this.error('パラメータは省略できません', token);
                 var existReturnValue = !this.ax.tokens[this.tokensPos].ex1;
-                var usedPushVar = null;
+                var usedPushVar: boolean = null;
                 if(existReturnValue) {
-                    var usedPushVar = this.compileParameter(sequence, true);
+                    usedPushVar = this.compileParameter(sequence, true);
                     if(this.compileParametersSub(sequence) > 0) throw this.error('return の引数が多すぎます', token);
                 }
                 this.pushNewInsn(sequence, InsnCode.RETURN, [existReturnValue, usedPushVar], token);
@@ -222,7 +222,7 @@ module BitterHSP {
                 var argc: number;
                 if(this.ax.tokens[this.tokensPos].ex2) {
                     this.pushNewInsn(sequence, InsnCode.PUSH,
-                                     [new IntValue(-1)], token);
+                                     [-1], token);
                     argc = 1 + this.compileParametersSub(sequence);
                 } else {
                     argc = this.compileParameters(sequence);
@@ -281,9 +281,9 @@ module BitterHSP {
                 if(structToken.type != TokenType.STRUCT || prmInfo.mptype != MPType.STRUCTTAG) {
                     throw this.error('モジュールが指定されていません', structToken);
                 }
-                var module = this.getUserDefFunc(prmInfo.subid);
-                var paramsInfo = null;
-                var argc;
+                var module = this.getModule(prmInfo.subid);
+                var paramsInfo: any = null;
+                var argc: number;
                 if(module.constructor) {
                     paramsInfo = this.compileUserDefFuncall0(sequence, module.constructor, false, false);
                     argc = paramsInfo[0].length;
@@ -381,7 +381,7 @@ module BitterHSP {
                 this.pushNewInsn(sequence, InsnCode.GOTO, [label], token);
             }
         }
-        private compileParameters(sequence, cannotBeOmitted, notReceiveVar): number {
+        private compileParameters(sequence: Array<Insn>, cannotBeOmitted = false, notReceiveVar = false): number {
             var argc = 0;
             if(this.ax.tokens[this.tokensPos].ex2) {
                 if(cannotBeOmitted) {
@@ -393,7 +393,7 @@ module BitterHSP {
             argc += this.compileParametersSub(sequence, cannotBeOmitted, notReceiveVar);
             return argc;
         }
-        private compileParametersSub(sequence, cannotBeOmitted, notReceiveVar): number {
+        private compileParametersSub(sequence: Array<Insn>, cannotBeOmitted = false, notReceiveVar = false): number {
             var argc = 0;
             while(true) {
                 var token = this.ax.tokens[this.tokensPos];
@@ -426,7 +426,7 @@ module BitterHSP {
         戻り値: パラメータが単一の変数であり、
                 変数を積む命令を生成したとき true 、そうでないとき false
         */
-        private compileParameter(sequence: Array<Insn>, notReceiveVar: bool): boolean {
+        private compileParameter(sequence: Array<Insn>, notReceiveVar = false): boolean {
             var headPos = this.tokensPos;
             var usedPushVar = false;
             while(true) {
@@ -446,17 +446,17 @@ module BitterHSP {
                     break;
                 case TokenType.STRING:
                     this.pushNewInsn(sequence, InsnCode.PUSH,
-                                     [new StrValue(token.val)]);
+                                     [token.stringValue]);
                     this.tokensPos ++;
                     break;
                 case TokenType.DNUM:
                     this.pushNewInsn(sequence, InsnCode.PUSH,
-                                     [new DoubleValue(token.val)]);
+                                     [token.doubleValue]);
                     this.tokensPos ++;
                     break;
                 case TokenType.INUM:
                     this.pushNewInsn(sequence, InsnCode.PUSH,
-                                     [new IntValue(token.val)]);
+                                     [token.val]);
                     this.tokensPos ++;
                     break;
                 case TokenType.STRUCT:
@@ -524,7 +524,7 @@ module BitterHSP {
                 }
             }
         }
-        private skipParameters(pos: number): number;
+        private skipParameters(pos: number): number {
             var skipped = 0;
             var size = 0;
             while((skipped = this.skipParameter(pos + size))) {
@@ -583,14 +583,14 @@ module BitterHSP {
         }
         private compileOptionalJumpType(sequence: Array<Insn>) {
             var token = this.ax.tokens[this.tokensPos];
-            if(token.type == TokenType.PROGCMD && token.val == 0) {
-                this.pushNewInsn(sequence, InsnCode.PUSH, [JumpType.GOTO], token);
+            if(token.type == TokenType.PROGCMD && token.val == 0) { // goto
+                this.pushNewInsn(sequence, InsnCode.PUSH, [0], token);
                 this.tokensPos ++;
-            } else if(token.type == TokenType.PROGCMD && token.val == 1) {
-                this.pushNewInsn(sequence, InsnCode.PUSH, [JumpType.GOSUB], token);
+            } else if(token.type == TokenType.PROGCMD && token.val == 1) { // gosub
+                this.pushNewInsn(sequence, InsnCode.PUSH, [1], token);
                 this.tokensPos ++;
             } else {
-                this.pushNewInsn(sequence, InsnCode.PUSH, [JumpType.GOTO], token);
+                this.pushNewInsn(sequence, InsnCode.PUSH, [0], token);
             }
         }
         private compileUserDefFuncall(sequence: Array<Insn>) {
@@ -777,7 +777,6 @@ module BitterHSP {
         }
         private getVariableData0(): any {
             var token = this.ax.tokens[this.tokensPos];
-            var result;
             if(token.type == TokenType.VAR) {
                 return [ProxyVarType.STATIC, token.code];
             } else if(token.type == TokenType.STRUCT) {
@@ -847,7 +846,8 @@ module BitterHSP {
     }
 
     class Label {
-        consturctor(public pos: number) {}
+        public pos: number = null;
+        constructor() {}
     }
 
     class UserDefFunc {

@@ -146,7 +146,6 @@ module BitterHSP {
 
         private createVariableNames(dinfo: BinaryReader): Array<string> {
             var variableNames = new Array<string>(this.max_val);
-            console.log([].map.call(this.dinfo.slice(dinfo.cursor), (x)=>x.charCodeAt(0)));
             var i = 0;
             while (true) {
                 var ofs = dinfo.readUint8();
@@ -251,10 +250,13 @@ module BitterHSP {
         }
     }
     export class Token {
+        public val: number;
         constructor(public type: number, public ex1: boolean, public ex2: boolean,
                     public code: number, public fileName: string, public lineNumber: number,
-                    public pos: number, public size: number, public skipSize: number,
-                    public stringValue: string, public doubleValue: number) { }
+                    public pos: number, public size: number, public skipOffset: number,
+                    public stringValue: string, public doubleValue: number) {
+            this.val = this.code;
+        }
     }
 
     export class FuncInfo {
@@ -269,7 +271,7 @@ module BitterHSP {
         constructor(public mptype: number, public subid: number, public offset: number) {}
     }
 
-    enum TokenType {
+    export enum TokenType {
         MARK      = 0,
         VAR       = 1,
         STRING    = 2,
