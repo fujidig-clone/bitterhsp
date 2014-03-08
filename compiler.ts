@@ -194,13 +194,9 @@ module BitterHSP {
             case 0x02: // return
                 this.tokensPos ++;
                 if(this.ax.tokens[this.tokensPos].ex2) throw this.error('パラメータは省略できません', token);
-                var existReturnValue = !this.ax.tokens[this.tokensPos].ex1;
-                var usedPushVar: boolean = null;
-                if(existReturnValue) {
-                    this.compileParameter(sequence, true);
-                    if(this.compileParametersSub(sequence) > 0) throw this.error('return の引数が多すぎます', token);
-                }
-                this.pushNewInsn(sequence, InsnCode.RETURN, [existReturnValue], token);
+                var argc = this.compileParameters(sequence);
+                if(argc > 1) throw this.error('return の引数が多すぎます', token);
+                this.pushNewInsn(sequence, InsnCode.RETURN, [argc == 1], token);
                 break;
             case 0x03: // break
                 this.tokensPos ++;
@@ -283,15 +279,9 @@ module BitterHSP {
                 }
                 var module = this.getModule(prmInfo.subid);
                 var paramsInfo: any = null;
-                var argc: number;
-                if(module.constructor) {
-                    paramsInfo = this.compileUserDefFuncall0(sequence, module.constructor, false, false);
-                    argc = paramsInfo[0].length;
-                } else {
-                    argc = this.compileParametersSub(sequence);
-                }
+                var argc: number = this.compileParametersSub(sequence);
                 this.pushNewInsn(sequence, InsnCode.NEWMOD,
-                                 [varData, module, paramsInfo, argc], token);
+                                 [varData, module, argc], token);
                 break;
             case 0x14: // delmod
                 this.tokensPos ++;
@@ -596,67 +586,16 @@ module BitterHSP {
         private compileUserDefFuncall(sequence: Array<Insn>) {
             var token = this.ax.tokens[this.tokensPos++];
             var userDefFunc = this.getUserDefFunc(token.code);
-            var paramsInfo = this.compileUserDefFuncall0(sequence, userDefFunc, true, true);
+            var argc = this.compileParenAndParameters(sequence);
             this.pushNewInsn(sequence, InsnCode.CALL_USERDEF_FUNC,
-                             [userDefFunc, paramsInfo], token);
+                             [userDefFunc, argc], token);
         }
         private compileUserDefCommand(sequence: Array<Insn>) {
             var token = this.ax.tokens[this.tokensPos++];
             var userDefFunc = this.getUserDefFunc(token.code);
-            var paramsInfo = this.compileUserDefFuncall0(sequence, userDefFunc, false, true);
+            var argc = this.compileParameters(sequence);
             this.pushNewInsn(sequence, InsnCode.CALL_USERDEF_CMD,
-                             [userDefFunc, paramsInfo], token);
-        }
-        private compileUserDefFuncall0(sequence: Array<Insn>, userDefFunc: UserDefFunc, isCType: boolean, isHead: boolean): any {
-            var argsCount = 0;
-            var paramTypes: Array<ParamType> = [];
-            var paramVals: Array<any>  = [];
-            function nextMPType(): MPType {
-                do {
-                    var mptype = userDefFunc.paramTypes[argsCount++];
-                } while(mptype == MPType.LOCALVAR);
-                return mptype;
-            }
-            function push(type: ParamType, val: any) {
-                paramTypes.push(type);
-                paramVals.push(val);
-            }
-            if(isHead && isCType) this.compileLeftParen(sequence);
-            if(isHead && this.ax.tokens[this.tokensPos].ex2) {
-                push(ParamType.OMMITED, null);
-                nextMPType();
-            }
-            while(true) {
-                var token = this.ax.tokens[this.tokensPos];
-                if(!token || token.ex1) break;
-                if(token.type == TokenType.MARK) {
-                    if(token.code == 63) { // '?'
-                        this.tokensPos ++;
-                        push(ParamType.OMMITED, null);
-                        nextMPType();
-                        continue;
-                    }
-                    if(token.code == 41) { // ')'
-                        break;
-                    }
-                }
-                var mptype = nextMPType();
-                if(mptype == MPType.ARRAYVAR) {
-                    if((token.type == TokenType.VAR || token.type == TokenType.STRUCT) &&
-                       this.isOnlyVar(this.tokensPos, this.tokensPos)) {
-                        push(ParamType.VARIABLE, this.getVariableData(sequence));
-                    } else {
-                        this.compileParameter(sequence, false);
-                        push(ParamType.VALUE, null);
-                    }
-                    continue;
-                }
-                var notReceiveVar = mptype != MPType.SINGLEVAR && mptype != MPType.MODULEVAR;
-                var usedPushVar = this.compileParameter(sequence, notReceiveVar);
-                push(usedPushVar ? ParamType.VARIABLE : ParamType.VALUE, literal);
-            }
-            if(isCType) this.compileRightParen(sequence);
-            return [paramTypes, paramVals];
+                             [userDefFunc, argc], token);
         }
         private getUserDefFunc(finfoId: number): UserDefFunc {
             var func = this.userDefFuncs[finfoId];
