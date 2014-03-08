@@ -271,7 +271,7 @@ module BitterHSP {
                 if(this.ax.tokens[this.tokensPos].ex2) {
                     throw this.error('パラメータは省略できません');
                 }
-                var varData = this.getVariableDataNoSubscript();
+                this.compileVariable(sequence); 
                 var structToken = this.ax.tokens[this.tokensPos++];
                 var prmInfo = this.ax.prmsInfo[structToken.code];
                 if(structToken.type != TokenType.STRUCT || prmInfo.mptype != MPType.STRUCTTAG) {
@@ -281,7 +281,7 @@ module BitterHSP {
                 var paramsInfo: any = null;
                 var argc: number = this.compileParametersSub(sequence);
                 this.pushNewInsn(sequence, InsnCode.NEWMOD,
-                                 [varData, module, argc], token);
+                                 [module, argc], token);
                 break;
             case 0x14: // delmod
                 this.tokensPos ++;
@@ -689,39 +689,6 @@ module BitterHSP {
                 return useGetVar;
             default:
                 return null;
-            }
-        }
-        private getVariableData(sequence: Array<Insn>): any {
-            var token = this.ax.tokens[this.tokensPos];
-            var result = this.getVariableData0();
-            this.tokensPos ++;
-            var argc = this.compileVariableSubscript(sequence);
-            if(argc) {
-                this.pushNewInsn(sequence, InsnCode.POP_N, [argc], token);
-            }
-            return result;
-        }
-        private getVariableDataNoSubscript(): any {
-            var result = this.getVariableData0();
-            if(this.isLeftParenToken(this.ax.tokens[++this.tokensPos])) {
-                throw this.error('変数の添字は指定できません');
-            }
-            return result;
-        }
-        private getVariableData0(): any {
-            var token = this.ax.tokens[this.tokensPos];
-            if(token.type == TokenType.VAR) {
-                return [ProxyVarType.STATIC, token.code];
-            } else if(token.type == TokenType.STRUCT) {
-                var type = this.getProxyVarType();
-                var funcInfo = this.ax.funcsInfo[this.getFinfoIdByMinfoId(token.code)];
-                if(type == ProxyVarType.MEMBER) {
-                    return [type, token.code - funcInfo.prmindex - 1];
-                } else {
-                    return [type, token.code - funcInfo.prmindex];
-                }
-            } else {
-                throw new Error('must not happen');
             }
         }
         private getProxyVarType() {
