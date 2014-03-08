@@ -85,7 +85,7 @@ module BitterHSP {
         }
         private compileAssignment(sequence: Array<Insn>) {
             var varToken = this.ax.tokens[this.tokensPos];
-            var insnCode: number;
+            var insnCode: number; // XXX
             var opts: Array<any>;
             switch(varToken.type) {
             case TokenType.VAR:
@@ -669,7 +669,7 @@ module BitterHSP {
             if(func) return func;
             var funcInfo = this.ax.funcsInfo[finfoId];
             if (funcInfo.index != -1 && funcInfo.index != -2) { // STRUCTDAT_INDEX_FUNC, STRUCTDAT_INDEX_CFUNC
-                return null;
+                throw this.error();
             }
             var isCType = funcInfo.index == -2;
             var paramTypes: Array<MPType> = [];
@@ -683,7 +683,7 @@ module BitterHSP {
             if(module) return module;
             var funcInfo = this.ax.funcsInfo[finfoId];
             if(funcInfo.index != -3) { // STRUCTDAT_INDEX_STRUCT
-                return null;
+                throw this.error();
             }
             var destructor = funcInfo.otindex != 0 ? this.getUserDefFunc(funcInfo.otindex) : null;
             var constructorFinfoId = this.ax.prmsInfo[funcInfo.prmindex].offset;
