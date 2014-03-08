@@ -36,7 +36,7 @@
         }
 
         readInt16(): number {
-            var v = this.view.getInt16(this.cursor);
+            var v = this.view.getInt16(this.cursor, this.littleEndian);
             this.cursor += 2;
             return v;
         }
