@@ -5,7 +5,7 @@
 // how to run:  tsc app.ts --out app.js && node app.js
 
 var fs = require("fs");
-var binary = fs.readFileSync("hsp-programs/hello/hello.ax").toString("binary");
+var binary = fs.readFileSync(process.argv[2] || "hsp-programs/hello/hello.ax").toString("binary");
 var axdata = new BitterHSP.AXData(binary);
 var sequence = new BitterHSP.Compiler(axdata).compile();
 
