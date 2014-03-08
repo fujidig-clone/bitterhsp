@@ -96,7 +96,7 @@ module BitterHSP {
                 break;
             case TokenType.STRUCT:
                 var proxyVarType = this.getProxyVarType();
-                if(!proxyVarType) {
+                if(proxyVarType == null) {
                     throw this.error('変数が指定されていません');
                 }
                 var prmInfo = this.ax.prmsInfo[varToken.code];
@@ -273,7 +273,6 @@ module BitterHSP {
                     throw this.error('モジュールが指定されていません', structToken);
                 }
                 var module = this.getModule(prmInfo.subid);
-                var paramsInfo: any = null;
                 var argc: number = this.compileParametersSub(sequence);
                 this.pushNewInsn(sequence, InsnCode.NEWMOD,
                                  [module, argc], token);
@@ -827,12 +826,6 @@ module BitterHSP {
         ARG_VAR,
         ARG_ARRAY,
         ARG_LOCAL,
-    }
-
-    export enum ParamType {
-        OMMITED,
-        VARIABLE,
-        VALUE,
     }
 
     export class CompileError {
