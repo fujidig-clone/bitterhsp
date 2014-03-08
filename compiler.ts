@@ -102,11 +102,6 @@ module BitterHSP {
                 var prmInfo = this.ax.prmsInfo[varToken.code];
                 var funcInfo = this.ax.funcsInfo[this.getFinfoIdByMinfoId(varToken.code)];
                 switch(proxyVarType) {
-                case ProxyVarType.THISMOD:
-                    insnCode = 0;
-                    opts = [];
-                    this.compileProxyVariable(sequence);
-                    break;
                 case ProxyVarType.MEMBER:
                     insnCode = 3;
                     this.tokensPos ++;
@@ -413,26 +408,22 @@ module BitterHSP {
         でも、変数として受け取ることがないパラメータの場合、それは無駄である。
         このパラメータを true にすれば値そのものを積む命令を生成する。
         
-        戻り値: パラメータが単一の変数であり、
-                変数を積む命令を生成したとき true 、そうでないとき false
         */
-        private compileParameter(sequence: Array<Insn>, notReceiveVar = false): boolean {
+        private compileParameter(sequence: Array<Insn>, notReceiveVar = false) {
             var headPos = this.tokensPos;
-            var usedPushVar = false;
             while(true) {
                 var token = this.ax.tokens[this.tokensPos];
-                if(!token || token.ex1) return usedPushVar;
+                if(!token || token.ex1) return;
                 switch(token.type) {
                 case TokenType.MARK:
                     if(token.code == 41) { // ')'
-                        return usedPushVar;
+                        return;
                     }
                     this.compileOperator(sequence);
                     break;
                 case TokenType.VAR:
-                    var useGetVar = notReceiveVar || !this.isOnlyVar(this.tokensPos, headPos);
-                    this.compileStaticVariable(sequence, useGetVar);
-                    usedPushVar = !useGetVar;
+                    var useValue = notReceiveVar || !this.isOnlyVar(this.tokensPos, headPos);
+                    this.compileStaticVariable(sequence, useValue);
                     break;
                 case TokenType.STRING:
                     this.pushNewInsn(sequence, InsnCode.PUSH,
@@ -450,9 +441,8 @@ module BitterHSP {
                     this.tokensPos ++;
                     break;
                 case TokenType.STRUCT:
-                    var onlyVar = this.isOnlyVar(this.tokensPos, headPos);
-                    var result = this.compileStruct(sequence, notReceiveVar || !onlyVar);
-                    if(onlyVar) usedPushVar = result;
+                    var useValue = notReceiveVar || !this.isOnlyVar(this.tokensPos, headPos);
+                    this.compileStruct(sequence, useValue);
                     break;
                 case TokenType.LABEL:
                     this.pushNewInsn(sequence, InsnCode.PUSH,
@@ -477,7 +467,7 @@ module BitterHSP {
                     throw this.error("命令コード " + token.type + " は解釈できません。");
                 }
                 token = this.ax.tokens[this.tokensPos];
-                if(token && token.ex2) return usedPushVar;
+                if(token && token.ex2) return;
             }
         }
         private isOnlyVar(pos: number, headPos: number): boolean {
@@ -551,16 +541,20 @@ module BitterHSP {
                 this.compileSysvar(sequence);
             }
         }
-        private compileStruct(sequence: Array<Insn>, useGetVar: boolean): boolean {
+        private compileStruct(sequence: Array<Insn>, useGetVar: boolean) {
             var token = this.ax.tokens[this.tokensPos];
             var prmInfo = this.ax.prmsInfo[token.code];
-            var usedPushVar = this.compileProxyVariable(sequence, useGetVar);
-            if(usedPushVar == null) {
+            if (this.getProxyVarType() != null) {
+                this.compileProxyVariable(sequence, useGetVar);
+            } else if (token.type == -1) {
+                this.tokensPos ++;
+                this.pushNewInsn(sequence, InsnCode.THISMOD, [], token);
+            } else {
+                this.tokensPos ++;
                 var funcInfo = this.ax.funcsInfo[this.getFinfoIdByMinfoId(token.code)];
                 this.pushNewInsn(sequence, InsnCode.GETARG,
                                  [token.code - funcInfo.prmindex], token);
             }
-            return usedPushVar;
         }
         private compileSysvar(sequence: Array<Insn>) {
             var token = this.ax.tokens[this.tokensPos++];
@@ -657,47 +651,43 @@ module BitterHSP {
             }
             throw this.error('変数が指定されていません');
         }
-        private compileStaticVariable(sequence: Array<Insn>, useGetVar = false) {
+        private compileStaticVariable(sequence: Array<Insn>, useValue = false) {
             var token = this.ax.tokens[this.tokensPos++];
             var argc = this.compileVariableSubscript(sequence);
-            this.pushNewInsn(sequence, useGetVar ? InsnCode.GET_VAR : InsnCode.PUSH_VAR,
+            this.pushNewInsn(sequence, useValue ? InsnCode.GET_VAR : InsnCode.PUSH_VAR,
                              [token.code, argc], token);
         }
-        private compileProxyVariable(sequence: Array<Insn>, useGetVar = false): boolean {
+        private compileProxyVariable(sequence: Array<Insn>, useValue = false) {
             var proxyVarType = this.getProxyVarType();
             var token = this.ax.tokens[this.tokensPos++];
             var prmInfo = this.ax.prmsInfo[token.code];
             var funcInfo = this.ax.funcsInfo[this.getFinfoIdByMinfoId(token.code)];
             switch(proxyVarType) {
-            case ProxyVarType.THISMOD:
-                this.pushNewInsn(sequence, InsnCode.THISMOD, [], token);
-                return true;
             case ProxyVarType.MEMBER:
                 var argc = this.compileVariableSubscript(sequence);
-                this.pushNewInsn(sequence, useGetVar ? InsnCode.GET_MEMBER : InsnCode.PUSH_MEMBER,
+                this.pushNewInsn(sequence, useValue ? InsnCode.GET_MEMBER : InsnCode.PUSH_MEMBER,
                                  [token.code - funcInfo.prmindex - 1, argc], token);
-                return useGetVar;
+                return;
             case ProxyVarType.ARG_VAR:
                 this.pushNewInsn(sequence, InsnCode.GETARG,
                                  [token.code - funcInfo.prmindex], token);
-                return true;
+                return;
             case ProxyVarType.ARG_ARRAY:
             case ProxyVarType.ARG_LOCAL:
                 var argc = this.compileVariableSubscript(sequence);
-                this.pushNewInsn(sequence, useGetVar ? InsnCode.GET_ARG_VAR : InsnCode.PUSH_ARG_VAR,
+                this.pushNewInsn(sequence, useValue ? InsnCode.GET_ARG_VAR : InsnCode.PUSH_ARG_VAR,
                                  [token.code - funcInfo.prmindex, argc], token);
-                return useGetVar;
+                return;
             default:
-                return null;
+                throw new Error(); // proxyVarType == nullとなるときに呼び出してはいけない
             }
         }
-        private getProxyVarType() {
+        // thismodや変数でないパラメータの場合nullを返す
+        // token.type == TokenType.STRUCTのときに呼ばれなければならない
+        private getProxyVarType(): ProxyVarType {
             var token = this.ax.tokens[this.tokensPos];
-            if(token.code == -1) {
-                if(this.isLeftParenToken(this.ax.tokens[this.tokensPos + 1])) {
-                    throw this.error('thismod に添字を指定しています');
-                }
-                return ProxyVarType.THISMOD;
+            if(token.code == -1) { // thismod
+                return null;
             }
             var prmInfo = this.ax.prmsInfo[token.code];
             if(prmInfo.subid >= 0) {
@@ -713,7 +703,7 @@ module BitterHSP {
                     throw this.error('パラメータタイプ var の変数に添字を指定しています');
                 }
                 return ProxyVarType.ARG_VAR;
-            default:
+                default: // var,array,local以外のパラメータ
                 return null;
             }
         }
@@ -833,8 +823,6 @@ module BitterHSP {
     }
 
     export enum ProxyVarType {
-        STATIC,
-        THISMOD,
         MEMBER,
         ARG_VAR,
         ARG_ARRAY,
