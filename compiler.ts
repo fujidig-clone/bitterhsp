@@ -287,7 +287,8 @@ module BitterHSP {
                 this.tokensPos ++;
                 var argc = this.compileParameters(sequence);
                 if(argc != 4) throw this.error('exgoto の引数の数が違います', token);
-                this.pushNewInsn(sequence, InsnCode.EXGOTO, [], token);
+                var label = this.popLabelInsn(sequence);
+                this.pushNewInsn(sequence, InsnCode.EXGOTO, [label], token);
                 break;
             case 0x19: // on
                 this.tokensPos ++;
@@ -296,14 +297,13 @@ module BitterHSP {
                     throw this.error('パラメータは省略できません', token);
                 }
                 this.compileParameter(sequence);
-                var jumpTypeToken = this.ax.tokens[this.tokensPos];
-                if(jumpTypeToken.ex1 || jumpTypeToken.type != TokenType.PROGCMD || jumpTypeToken.code > 1) {
-                    throw this.error('goto / gosub が指定されていません', token);
-                }
-                var isGosub = jumpTypeToken.code == 1;
-                this.tokensPos ++;
+                var isGosub = this.readJumpType(false);
                 var argc = this.compileParametersSub(sequence);
-                this.pushNewInsn(sequence, InsnCode.ON, [argc, isGosub], token);
+                var labels: Array<Label> = [];
+                for (var i = 0; i < argc; i ++) {
+                    labels.unshift(this.popLabelInsn(sequence));
+                }
+                this.pushNewInsn(sequence, InsnCode.ON, [labels, isGosub], token);
                 break;
             default:
                 this.compileCommand(sequence);
@@ -318,10 +318,11 @@ module BitterHSP {
             case 0x03: // onclick
             case 0x04: // oncmd
                 this.tokensPos ++;
-                this.compileOptionalJumpType(sequence);
-                var argc = 1 + this.compileParameters(sequence);
-                this.pushNewInsn(sequence, InsnCode.CALL_BUILTIN_CMD,
-                                 [token.type, token.code, argc], token);
+                var isGosub = this.readJumpType(true);
+                var label = this.readLabelLiteral();
+                var argc = this.compileParametersSub(sequence);
+                this.pushNewInsn(sequence, InsnCode.CALL_BUILTIN_HANDLER_CMD,
+                                 [token.type, token.code, isGosub, label, argc], token);
                 break;
             default:
                 this.compileCommand(sequence);
@@ -332,10 +333,11 @@ module BitterHSP {
             switch(token.code) {
             case 0x00: // button
                 this.tokensPos ++;
-                this.compileOptionalJumpType(sequence);
-                var argc = 1 + this.compileParameters(sequence);
-                this.pushNewInsn(sequence, InsnCode.CALL_BUILTIN_CMD,
-                                 [token.type, token.code, argc], token);
+                var isGosub = this.readJumpType(true);
+                var argc = this.compileParameters(sequence);
+                var label = this.popLabelInsn(sequence);
+                this.pushNewInsn(sequence, InsnCode.CALL_BUILTIN_HANDLER_CMD,
+                                 [token.type, token.code, isGosub, label, argc - 1], token);
                 break;
             default:
                 this.compileCommand(sequence);
@@ -363,6 +365,22 @@ module BitterHSP {
             } else {
                 if(argc != 0) throw this.error("else の引数の数が間違っています。", token);
                 this.pushNewInsn(sequence, InsnCode.GOTO, [label], token);
+            }
+        }
+        private popLabelInsn(sequence: Array<Insn>): Label {
+                var insn = sequence.pop();
+                if (!(insn.code == InsnCode.PUSH && insn.opts[0] instanceof Label)) {
+                    throw this.error('ラベル名が指定されていません');
+                }
+                return insn.opts[0];
+        }
+        private readLabelLiteral(): Label {
+            var token = this.ax.tokens[this.tokensPos++];
+            var nextToken = this.ax.tokens[this.tokensPos];
+            if (token.type == TokenType.LABEL && (!nextToken || nextToken.ex1 || nextToken.ex2)) {
+                return this.labels[token.code];
+            } else {
+                throw this.error("ラベル名が指定されていません");
             }
         }
         private compileParameters(sequence: Array<Insn>, cannotBeOmitted = false, notReceiveVar = false): number {
@@ -564,17 +582,16 @@ module BitterHSP {
             this.pushNewInsn(sequence, InsnCode.CALL_BUILTIN_FUNC,
                              [token.type, token.code, 0], token);
         }
-        private compileOptionalJumpType(sequence: Array<Insn>) {
+        private readJumpType(optional: boolean): boolean {
             var token = this.ax.tokens[this.tokensPos];
-            if(token.type == TokenType.PROGCMD && token.val == 0) { // goto
-                this.pushNewInsn(sequence, InsnCode.PUSH, [0], token);
+            if(!token.ex1 && token.type == TokenType.PROGCMD && token.val <= 1) {
                 this.tokensPos ++;
-            } else if(token.type == TokenType.PROGCMD && token.val == 1) { // gosub
-                this.pushNewInsn(sequence, InsnCode.PUSH, [1], token);
-                this.tokensPos ++;
-            } else {
-                this.pushNewInsn(sequence, InsnCode.PUSH, [0], token);
+                return token.val == 1;
             }
+            if (optional) {
+                return false;
+            }
+            throw this.error('goto / gosubが指定されていません');
         }
         private compileUserDefFuncall(sequence: Array<Insn>) {
             var token = this.ax.tokens[this.tokensPos++];
@@ -793,6 +810,7 @@ module BitterHSP {
         DEC_MEMBER,
         CALL_BUILTIN_CMD,
         CALL_BUILTIN_FUNC,
+        CALL_BUILTIN_HANDLER_CMD,
         CALL_USERDEF_CMD,
         CALL_USERDEF_FUNC,
         GETARG,
