@@ -15,7 +15,7 @@ module BitterHSP {
         constructor(private ax: AXData) {
             this.labels = []; // HSP のラベルIDに対応したラベル
             for(var i = 0; i < ax.labels.length; i ++) {
-                this.labels[i] = new Label;
+                this.labels[i] = new Label(ax.labelNames[i]);
             }
         }
 
@@ -757,7 +757,10 @@ module BitterHSP {
 
     export class Label {
         public pos: number = null;
-        constructor() {}
+        public name: string;
+        constructor(name = "") {
+            this.name = name;
+        }
     }
 
     export class UserDefFunc {
