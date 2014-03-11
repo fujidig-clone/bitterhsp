@@ -3,7 +3,7 @@ package ;
 @:native('BitterHSP.Compiler')
 extern class Compiler_ {
 	public function new(data:String);
-	public function compile(): Array<Dynamic>;
+	public function compile(): Dynamic;
 	public var userDefFuncs: Array<UserDefFunc>;
         public var modules: Array<Module>;
 
@@ -17,18 +17,25 @@ extern class Insn_ {
 	public var lineNumber: Int;
 }
 
+typedef CompileResult = {
+	var sequence: Array<Insn>;
+	var userDefFuncs: Array<UserDefFunc>;
+	var modules: Array<Module>;
+}
+
 class Compiler {
 	private var compiler: Compiler_;
 	public function new(data:String) {
 		this.compiler = new Compiler_(data);
 	}
-	public var userDefFuncs: Array<UserDefFunc>;
-        public var modules: Array<Module>;
-	public function compile(): Array<Insn> {
-		var sequence = this.compiler.compile().map(Compiler.convertInsn);
-		this.userDefFuncs = compiler.userDefFuncs;
-		this.modules = compiler.modules;
-		return sequence;
+	public function compile(): CompileResult {
+		var compiled = this.compiler.compile();
+		var sequence = compiled.sequence.map(Compiler.convertInsn);
+		return {
+			sequence: sequence,
+			userDefFuncs: compiled.userDefFuncs,
+			modules: compiled.modules
+		};
 	}
 
 	static private function convertInsn(insn:Insn_): Insn {

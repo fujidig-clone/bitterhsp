@@ -1,6 +1,11 @@
 ///<reference path="axdata.ts"/>
 //
 module BitterHSP {
+    export interface CompileResult {
+        sequence: Array<Insn>;
+        userDefFuncs: Array<UserDefFunc>;
+        modules: Array<Module>;
+    }
     export class Compiler {
         private ax: AXData;
         private tokensPos = 0;
@@ -17,7 +22,7 @@ module BitterHSP {
             }
         }
 
-        public compile(): Array<Insn> {
+        public compile(): CompileResult {
             var sequence: Array<Insn> = [];
             while(this.tokensPos < this.ax.tokens.length) {
                 var token = this.ax.tokens[this.tokensPos];
@@ -65,7 +70,11 @@ module BitterHSP {
                     throw this.error("命令コード " + token.type + " は解釈できません。");
                 }
             }
-            return sequence;
+            return {
+                sequence: sequence,
+                userDefFuncs: this.userDefFuncs,
+                modules: this.modules
+            };
         }
         private pushNewInsn(sequence: Array<Insn>, code: InsnCode, opts: Array<any>, token?: Token) {
             token || (token = this.ax.tokens[this.tokensPos]);

@@ -8,10 +8,12 @@ class T {
 		if (path == null) path = "hsp-programs/hello/hello.ax";
 		var binary = Node.fs.readFileSync(path).toString("binary");
 		var compiler = new Compiler(binary);
-		var sequence = compiler.compile();
-		var userDefFuncs = compiler.userDefFuncs;
-		trace(Std.string(T.collectSubroutines(sequence)));
+		var compiled = compiler.compile();
+		var userDefFuncs = compiled.userDefFuncs;
+		trace(Std.string(T.collectSubroutines(compiled.sequence)));
 	}
+
+	static function collectSubroutine() {}
 
 	static function collectSubroutines(sequence:Array<Insn>): Array<SubRoutine> {
 		var labelsSet = new Map<Label, Bool>();
