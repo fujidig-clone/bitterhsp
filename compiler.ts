@@ -7,6 +7,10 @@ module BitterHSP {
         private ifLabels: NumDictionary<Array<Label>> = Object.create(null);
         private userDefFuncs: Array<UserDefFunc> = [];
         private modules: Array<Module> = [];
+
+        static compile(data: string): Array<Insn> {
+            return new Compiler(new AXData(data)).compile();
+        }
         
         constructor(private ax: AXData) {
             this.labels = []; // HSP のラベルIDに対応したラベル
