@@ -2,17 +2,15 @@
 //
 module BitterHSP {
     export class Compiler {
+        private ax: AXData;
         private tokensPos = 0;
         private labels: Array<Label>;
         private ifLabels: NumDictionary<Array<Label>> = Object.create(null);
-        private userDefFuncs: Array<UserDefFunc> = [];
-        private modules: Array<Module> = [];
+        public userDefFuncs: Array<UserDefFunc> = [];
+        public modules: Array<Module> = [];
 
-        static compile(data: string): Array<Insn> {
-            return new Compiler(new AXData(data)).compile();
-        }
-        
-        constructor(private ax: AXData) {
+        constructor(data: string) {
+            var ax = this.ax = new AXData(data);
             this.labels = []; // HSP のラベルIDに対応したラベル
             for(var i = 0; i < ax.labels.length; i ++) {
                 this.labels[i] = new Label(ax.labelNames[i]);

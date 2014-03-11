@@ -2,7 +2,11 @@ package ;
 
 @:native('BitterHSP.Compiler')
 extern class Compiler_ {
-	static public function compile(data:String): Array<Dynamic>;
+	public function new(data:String);
+	public function compile(): Array<Dynamic>;
+	public var userDefFuncs: Array<UserDefFunc>;
+        public var modules: Array<Module>;
+
 }
 
 @:native('BitterHSP.Insn')
@@ -14,8 +18,17 @@ extern class Insn_ {
 }
 
 class Compiler {
-	static public function compile(data:String): Array<Insn> {
-		return Compiler_.compile(data).map(Compiler.convertInsn);
+	private var compiler: Compiler_;
+	public function new(data:String) {
+		this.compiler = new Compiler_(data);
+	}
+	public var userDefFuncs: Array<UserDefFunc>;
+        public var modules: Array<Module>;
+	public function compile(): Array<Insn> {
+		var sequence = this.compiler.compile().map(Compiler.convertInsn);
+		this.userDefFuncs = compiler.userDefFuncs;
+		this.modules = compiler.modules;
+		return sequence;
 	}
 
 	static private function convertInsn(insn:Insn_): Insn {
@@ -180,6 +193,7 @@ enum Insn {
 
 typedef Label = {
 	var pos:Int;
+	var name:String;
 }
 
 typedef UserDefFunc = {
