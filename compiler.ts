@@ -216,7 +216,7 @@ module BitterHSP {
                 }
                 var argc: number;
                 if(this.ax.tokens[this.tokensPos].ex2) {
-                    this.pushNewInsn(sequence, InsnCode.PUSH,
+                    this.pushNewInsn(sequence, InsnCode.PUSH_INT,
                                      [-1], token);
                     argc = 1 + this.compileParametersSub(sequence);
                 } else {
@@ -373,7 +373,7 @@ module BitterHSP {
         }
         private popLabelInsn(sequence: Array<Insn>): Label {
                 var insn = sequence.pop();
-                if (!(insn.code == InsnCode.PUSH && insn.opts[0] instanceof Label)) {
+                if (!(insn.code == InsnCode.PUSH_LABEL && insn.opts[0] instanceof Label)) {
                     throw this.error('ラベル名が指定されていません');
                 }
                 return insn.opts[0];
@@ -447,17 +447,17 @@ module BitterHSP {
                     this.compileStaticVariable(sequence, useValue);
                     break;
                 case TokenType.STRING:
-                    this.pushNewInsn(sequence, InsnCode.PUSH,
+                    this.pushNewInsn(sequence, InsnCode.PUSH_STRING,
                                      [token.stringValue]);
                     this.tokensPos ++;
                     break;
                 case TokenType.DNUM:
-                    this.pushNewInsn(sequence, InsnCode.PUSH,
+                    this.pushNewInsn(sequence, InsnCode.PUSH_DOUBLE,
                                      [token.doubleValue]);
                     this.tokensPos ++;
                     break;
                 case TokenType.INUM:
-                    this.pushNewInsn(sequence, InsnCode.PUSH,
+                    this.pushNewInsn(sequence, InsnCode.PUSH_INT,
                                      [token.val]);
                     this.tokensPos ++;
                     break;
@@ -466,7 +466,7 @@ module BitterHSP {
                     this.compileStruct(sequence, useValue);
                     break;
                 case TokenType.LABEL:
-                    this.pushNewInsn(sequence, InsnCode.PUSH,
+                    this.pushNewInsn(sequence, InsnCode.PUSH_LABEL,
                                      [this.labels[token.code]]);
                     this.tokensPos ++;
                     break;
@@ -770,7 +770,10 @@ module BitterHSP {
 
     export enum InsnCode {
         NOP,
-        PUSH,
+        PUSH_INT,
+        PUSH_DOUBLE,
+        PUSH_STRING,
+        PUSH_LABEL,
         PUSH_DEFAULT,
         PUSH_VAR,
         GET_VAR,
@@ -837,9 +840,6 @@ module BitterHSP {
         GOTO_EXPR,
         GOSUB_EXPR,
         EXGOTO,
-        EXGOTO_OPT1,
-        EXGOTO_OPT2,
-        EXGOTO_OPT3,
         ON,
     }
 
@@ -853,4 +853,9 @@ module BitterHSP {
     export class CompileError {
         constructor(public message: string, public hspFileName: string, public hspLineNumber: number) {}
     }
+}
+
+declare var module;
+if (typeof module != "undefined") {
+    module.exports = BitterHSP;
 }
