@@ -11,8 +11,16 @@ class Set<K> {
 	public function add(k:K): Void {
 		this.map.set(k, true);
 	}
+	public function addAll(keys:Iterable<K>) {
+		for (k in keys) {
+			add(k);
+		}
+	}
 	public function has(k:K): Bool {
 		return this.map.exists(k);
+	}
+	public function remove(k:K) {
+		return this.map.remove(k);
 	}
 	public function iterator(): Iterator<K> {
 		return this.map.keys();
@@ -68,7 +76,6 @@ class Flow {
 		}
 		for (i in this.in_[insn]) {
 			if (!this.out[insn].has(i) && !this.kill[insn].has(i)) {
-				log('${insn} ${i}');
 				this.out[insn].add(i);
 				q.pushAll(nextInsns(insn));
 			}
@@ -144,16 +151,22 @@ class Flow {
 		this.kill = new Map();
 		this.gen = new Map();
 		var insn = this.sequence;
-		while (insn != null) {
+		var substs = new Map<Int, Array<Instruction>>();
+		for (insn in eachInsn()) {
 			this.gen[insn] = new Set(new Map());
 			this.kill[insn] = new Set(new Map());
 			switch (insn.opts) {
 			case Insn.Assign_static_var(id, _):
-				this.gen[insn].add(insn);
-				//this.kill[insn].add(insn);
+				substs.pushAt(id, insn);
 			default:
 			}
-			insn = insn.next;
+		}
+		for (id in substs.keys()) {
+			for (insn in substs[id]) {
+				this.gen[insn].add(insn);
+				this.kill[insn].addAll(substs[id]);
+				this.kill[insn].remove(insn);
+			}
 		}
 	}
 }
