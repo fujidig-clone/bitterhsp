@@ -21,6 +21,106 @@ class Set<K> {
 	}
 }
 
+typedef Variable = Int;
+
+class Flow {
+	var sequence: Instruction;
+	var kill: Map<Instruction,Set<Variable>>;
+	var gen: Map<Instruction,Set<Variable>>;
+	var in_: Map<Instruction,Set<Variable>>;
+	var out: Map<Instruction,Set<Variable>>;
+	var prevs: Map<Instruction,Set<Instruction>>;
+
+	function flow() {
+		this.init();
+		var updated = false;
+		do {
+			var insn = this.sequence;
+			while (insn != null) {
+				if (increase(insn)) updated = true;
+				insn = insn.next;
+			}
+		} while (updated);
+	}
+
+	function increase(insn:Instruction) {
+		var updated = false;
+		for (i in this.prevs[insn]) {
+			if (this.merge(this.in_[insn], this.out[i])) updated = true;
+		}
+		this.out[insn] = this.copy(this.gen[insn]);
+		for (i in this.in_[insn]) {
+			if (!this.kill[insn].has(i)) {
+				this.out[insn].add(i);
+			}
+		}
+		return updated;
+	}
+
+	function copy(set: Set<Variable>) {
+		var newSet = new Set<Variable>(new Map());
+		for (i in set) {
+			newSet.add(i);
+		}
+		return newSet;
+	}
+
+	function merge(a: Set<Variable>, b: Set<Variable>) {
+		var updated = false;
+		for (i in b) {
+			if (!a.has(i)) updated = true;
+			a.add(i);
+		}
+		return updated;
+	}
+
+	function init() {
+		this.makeKillGen();
+		var insn = this.sequence;
+		while (insn != null) {
+			this.in_[insn] = new Set(new Map());
+			this.out[insn] = this.copy(this.gen[insn]);
+			insn = insn.next;
+		}
+	}
+
+	function makePrevs() {
+		this.prevs = new Map();
+		var insn = this.sequence;
+		while (insn != null) {
+			for (i in this.nextInsns(insn)) {
+				if (this.prevs[i] == null) this.prevs[i] = new Set(new Map());
+				this.prevs[i].push(insn);
+			}
+			insn = insn.next;
+		}
+	}
+
+	function nextInsns(insn:Instruction): Array<Instruction> {
+		switch (insn.opts) {
+		default:
+			return [insn.next];
+		}
+	}
+	
+	function makeKillGen() {
+		this.kill = new Map();
+		this.gen = new Map();
+		var insn = this.sequence;
+		while (insn != null) {
+			switch (insn.opts) {
+			case Insn.Assign_static_var(id, _):
+				if (this.gen[insn] == null) this.gen[insn] = new Set(new Map());
+				if (this.kill[insn] == null) this.kill[insn] = new Set(new Map());
+				this.gen[insn].add(id);
+				this.kill[insn].add(id);
+			default:
+			}
+			insn = insn.next;
+		}
+	}
+}
+
 class T {
 	static function main(){
 		Node.global.BitterHSP = Node.require("./compiler");
@@ -33,6 +133,7 @@ class T {
 		var s = T.listSubroutines(compiled.sequence)[0];
 		trace(Std.string(collectSubRoutineBody(s).toArray()));
 	}
+
 
 	static function collectSubRoutineBody(subRoutine:SubRoutine) {
 		var label = T.toLabel(subRoutine);
