@@ -18,7 +18,7 @@ extern class Insn_ {
 }
 
 typedef CompileResult = {
-	var sequence: Array<Insn>;
+	var sequence: Instruction;
 	var userDefFuncs: Array<UserDefFunc>;
 	var modules: Array<Module>;
 }
@@ -30,9 +30,20 @@ class Compiler {
 	}
 	public function compile(): CompileResult {
 		var compiled = this.compiler.compile();
-		var sequence = compiled.sequence.map(Compiler.convertInsn);
+		var sequence: Array<Insn_> = compiled.sequence;
+		var labels: Array<Label> = compiled.labels;
+		var insnArray = sequence.map(function (i) {
+			var opts = Compiler.convertInsn(i);
+			return new Instruction(opts, i.fileName, i.lineNumber, null);
+		});
+		for (i in 0...insnArray.length-1) {
+			insnArray[i].next = insnArray[i+1];
+		}
+		for (label in labels) {
+			label.insn = insnArray[label.pos];
+		}
 		return {
-			sequence: sequence,
+			sequence: insnArray[0],
 			userDefFuncs: compiled.userDefFuncs,
 			modules: compiled.modules
 		};
@@ -72,9 +83,9 @@ class Compiler {
 		case 24: return Insn.Lteq;
 		case 25: return Insn.Rsh;
 		case 26: return Insn.Lsh;
-		case 27: return Insn.Goto;
-		case 28: return Insn.Ifne;
-		case 29: return Insn.Ifeq;
+		case 27: return Insn.Goto(a);
+		case 28: return Insn.Ifne(a);
+		case 29: return Insn.Ifeq(a);
 		case 30: return Insn.Assign;
 		case 31: return Insn.Assign_static_var(a, b);
 		case 32: return Insn.Assign_arg_array(a, b);
@@ -123,6 +134,24 @@ class Compiler {
 	}
 }
 
+class Instruction {
+	public var opts: Insn;
+	public var fileName: String;
+	public var lineNumber: Int;
+	public var next: Instruction;
+
+	public function new(opts: Insn, fileName: String, lineNumber: Int, next: Instruction) {
+		this.opts = opts;
+		this.fileName = fileName;
+		this.lineNumber = lineNumber;
+		this.next = next;
+#if debug
+		// Std.stringの出力にnextプロパティが出てこないようにする
+		untyped { Object.defineProperty(this, "next", {enumerable: false, writable: true}); }
+#end
+	}
+}
+
 enum Insn {
 	Nop;
 	Push_int(x:Int);
@@ -151,9 +180,9 @@ enum Insn {
 	Lteq;
 	Rsh;
 	Lsh;
-	Goto;
-	Ifne;
-	Ifeq;
+	Goto(label:Label);
+	Ifne(label:Label);
+	Ifeq(label:Label);
 	Assign;
 	Assign_static_var(id:Int, indicesCount:Int);
 	Assign_arg_array(id:Int, indicesCount:Int);
@@ -201,6 +230,7 @@ enum Insn {
 typedef Label = {
 	var pos:Int;
 	var name:String;
+	var insn:Instruction;
 }
 
 typedef UserDefFunc = {

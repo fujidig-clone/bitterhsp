@@ -5,6 +5,7 @@ module BitterHSP {
         sequence: Array<Insn>;
         userDefFuncs: Array<UserDefFunc>;
         modules: Array<Module>;
+        labels: Array<Label>;
     }
     export class Compiler {
         private ax: AXData;
@@ -73,8 +74,16 @@ module BitterHSP {
             return {
                 sequence: sequence,
                 userDefFuncs: this.userDefFuncs,
-                modules: this.modules
+                modules: this.modules,
+                labels: this.allLabels()
             };
+        }
+        private allLabels(): Array<Label> {
+            var ret: Array<Label> = [];
+            for (var labels in this.ifLabels) {
+                ret = ret.concat(labels);
+            }
+            return ret.concat(this.labels);
         }
         private pushNewInsn(sequence: Array<Insn>, code: InsnCode, opts: Array<any>, token?: Token) {
             token || (token = this.ax.tokens[this.tokensPos]);
