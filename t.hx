@@ -37,15 +37,16 @@ class Flow {
 
 	public function flow() {
 		this.init();
-		var updated = false;
+		var updated;
 		do {
+			updated = false;
 			for (insn in eachInsn()) {
 				if (increase(insn)) updated = true;
 			}
 		} while (updated);
 		for (insn in eachInsn()) {
-			var substs = this.gen[insn].toArray();
-			trace('${Type.enumConstructor(insn.opts)}: ${substs}');
+			var substs = this.out[insn].toArray();
+			trace('${insn}: ${substs}');
 		}
 	}
 
@@ -65,7 +66,7 @@ class Flow {
 		var updated = false;
 
 		for (i in this.prevs[insn]) {
-			if (merge(this.in_[insn], this.out[i])) updated = true;
+			if (merge(insn, this.in_[insn], this.out[i])) updated = true;
 		}
 		this.out[insn] = copy(this.gen[insn]);
 		for (i in this.in_[insn]) {
@@ -84,13 +85,19 @@ class Flow {
 		return newSet;
 	}
 
-	static function merge(a: Set<Subst>, b: Set<Subst>) {
+	static function merge(insn:Instruction, a: Set<Subst>, b: Set<Subst>) {
 		var updated = false;
 		for (i in b) {
-			if (!a.has(i)) updated = true;
-			a.add(i);
+			if (!a.has(i)) {
+				updated = true;
+				a.add(i);
+			}
 		}
 		return updated;
+	}
+
+	static function log(x) {
+		trace(Std.string(x));
 	}
 
 	function init() {
@@ -115,7 +122,6 @@ class Flow {
 		}
 		var insn = this.sequence;
 		while (insn != null) {
-			this.prevs[insn] = new Set(new Map());
 			for (i in this.nextInsns(insn)) {
 				this.prevs[i].add(insn);
 			}

@@ -150,6 +150,10 @@ class Instruction {
 		untyped { Object.defineProperty(this, "next", {enumerable: false, writable: true}); }
 #end
 	}
+
+	public function toString() {
+		return '<${this.lineNumber} ${Type.enumConstructor(this.opts)}>';
+	}
 }
 
 enum Insn {
