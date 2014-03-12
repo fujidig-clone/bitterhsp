@@ -21,34 +21,53 @@ class Set<K> {
 	}
 }
 
-typedef Variable = Int;
+typedef Subst = Instruction;
 
 class Flow {
 	var sequence: Instruction;
-	var kill: Map<Instruction,Set<Variable>>;
-	var gen: Map<Instruction,Set<Variable>>;
-	var in_: Map<Instruction,Set<Variable>>;
-	var out: Map<Instruction,Set<Variable>>;
+	var kill: Map<Instruction,Set<Subst>>;
+	var gen: Map<Instruction,Set<Subst>>;
+	var in_: Map<Instruction,Set<Subst>>;
+	var out: Map<Instruction,Set<Subst>>;
 	var prevs: Map<Instruction,Set<Instruction>>;
 
-	function flow() {
+	public function new(sequence) {
+		this.sequence = sequence;
+	}
+
+	public function flow() {
 		this.init();
 		var updated = false;
 		do {
-			var insn = this.sequence;
-			while (insn != null) {
+			for (insn in eachInsn()) {
 				if (increase(insn)) updated = true;
-				insn = insn.next;
 			}
 		} while (updated);
+		for (insn in eachInsn()) {
+			var substs = this.gen[insn].toArray();
+			trace('${Type.enumConstructor(insn.opts)}: ${substs}');
+		}
+	}
+
+	function eachInsn() {
+		var insn = this.sequence;
+		return {
+			hasNext: function() return insn != null,
+			next: function() {
+				var cur = insn;
+				insn = insn.next;
+				return cur;
+			}
+		};
 	}
 
 	function increase(insn:Instruction) {
 		var updated = false;
+
 		for (i in this.prevs[insn]) {
-			if (this.merge(this.in_[insn], this.out[i])) updated = true;
+			if (merge(this.in_[insn], this.out[i])) updated = true;
 		}
-		this.out[insn] = this.copy(this.gen[insn]);
+		this.out[insn] = copy(this.gen[insn]);
 		for (i in this.in_[insn]) {
 			if (!this.kill[insn].has(i)) {
 				this.out[insn].add(i);
@@ -57,15 +76,15 @@ class Flow {
 		return updated;
 	}
 
-	function copy(set: Set<Variable>) {
-		var newSet = new Set<Variable>(new Map());
+	static function copy(set: Set<Subst>) {
+		var newSet = new Set<Subst>(new Map());
 		for (i in set) {
 			newSet.add(i);
 		}
 		return newSet;
 	}
 
-	function merge(a: Set<Variable>, b: Set<Variable>) {
+	static function merge(a: Set<Subst>, b: Set<Subst>) {
 		var updated = false;
 		for (i in b) {
 			if (!a.has(i)) updated = true;
@@ -76,10 +95,13 @@ class Flow {
 
 	function init() {
 		this.makeKillGen();
+		this.makePrevs();
 		var insn = this.sequence;
+		this.in_ = new Map();
+		this.out = new Map();
 		while (insn != null) {
 			this.in_[insn] = new Set(new Map());
-			this.out[insn] = this.copy(this.gen[insn]);
+			this.out[insn] = copy(this.gen[insn]);
 			insn = insn.next;
 		}
 	}
@@ -88,9 +110,14 @@ class Flow {
 		this.prevs = new Map();
 		var insn = this.sequence;
 		while (insn != null) {
+			this.prevs[insn] = new Set(new Map());
+			insn = insn.next;
+		}
+		var insn = this.sequence;
+		while (insn != null) {
+			this.prevs[insn] = new Set(new Map());
 			for (i in this.nextInsns(insn)) {
-				if (this.prevs[i] == null) this.prevs[i] = new Set(new Map());
-				this.prevs[i].push(insn);
+				this.prevs[i].add(insn);
 			}
 			insn = insn.next;
 		}
@@ -98,6 +125,12 @@ class Flow {
 
 	function nextInsns(insn:Instruction): Array<Instruction> {
 		switch (insn.opts) {
+		case Insn.Goto(label):
+			return [label.insn];
+		case Insn.Ifne(label):
+			return [label.insn, insn.next];
+		case Insn.Ifeq(label):
+			return [label.insn, insn.next];
 		default:
 			return [insn.next];
 		}
@@ -108,12 +141,12 @@ class Flow {
 		this.gen = new Map();
 		var insn = this.sequence;
 		while (insn != null) {
+			this.gen[insn] = new Set(new Map());
+			this.kill[insn] = new Set(new Map());
 			switch (insn.opts) {
 			case Insn.Assign_static_var(id, _):
-				if (this.gen[insn] == null) this.gen[insn] = new Set(new Map());
-				if (this.kill[insn] == null) this.kill[insn] = new Set(new Map());
-				this.gen[insn].add(id);
-				this.kill[insn].add(id);
+				this.gen[insn].add(insn);
+				//this.kill[insn].add(insn);
 			default:
 			}
 			insn = insn.next;
@@ -129,9 +162,9 @@ class T {
 		var binary = Node.fs.readFileSync(path).toString("binary");
 		var compiler = new Compiler(binary);
 		var compiled = compiler.compile();
+		var sequence = compiled.sequence;
 		var userDefFuncs = compiled.userDefFuncs;
-		var s = T.listSubroutines(compiled.sequence)[0];
-		trace(Std.string(collectSubRoutineBody(s).toArray()));
+		new Flow(compiled.sequence).flow();
 	}
 
 
