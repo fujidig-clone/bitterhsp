@@ -81,7 +81,7 @@ module BitterHSP {
         private allLabels(): Array<Label> {
             var ret: Array<Label> = [];
             for (var labels in this.ifLabels) {
-                ret = ret.concat(labels);
+                ret = ret.concat(this.ifLabels[labels]);
             }
             return ret.concat(this.labels);
         }
@@ -768,7 +768,7 @@ module BitterHSP {
     }
 
     export class Insn {
-        constructor(public code: InsnCode, public opts: any, public fileName: string, public lineNo: number) {}
+        constructor(public code: InsnCode, public opts: any, public fileName: string, public lineNumber: number) {}
     }
 
     export class Label {

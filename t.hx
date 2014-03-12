@@ -16,6 +16,9 @@ class Set<K> {
 	public function iterator(): Iterator<K> {
 		return this.map.keys();
 	}
+	public function toArray(): Array<K> {
+		return [for (x in this.map.keys()) x];
+	}
 }
 
 class T {
@@ -27,7 +30,41 @@ class T {
 		var compiler = new Compiler(binary);
 		var compiled = compiler.compile();
 		var userDefFuncs = compiled.userDefFuncs;
-		trace(Std.string(T.listSubroutines(compiled.sequence)));
+		var s = T.listSubroutines(compiled.sequence)[0];
+		trace(Std.string(collectSubRoutineBody(s).toArray()));
+	}
+
+	static function collectSubRoutineBody(subRoutine:SubRoutine) {
+		var label = T.toLabel(subRoutine);
+		var q = [label.insn];
+		var bodyInsns = new Set<Instruction>(new Map());
+		while (q.length > 0) {
+			var insn = q.shift();
+			if (bodyInsns.has(insn)) continue;
+			bodyInsns.add(insn);
+			switch (insn.opts) {
+			case Insn.Goto(label):
+				q.push(label.insn);
+			case Insn.Ifne(label):
+				q.push(label.insn);
+				q.push(insn.next);
+			case Insn.Ifeq(label):
+				q.push(label.insn);
+				q.push(insn.next);
+			case Insn.Return:
+				// do nothing
+			default:
+				q.push(insn.next);
+			}
+		}
+		return bodyInsns;
+	}
+
+	static function toLabel(subRoutine:SubRoutine) {
+		switch (subRoutine) {
+		case SubRoutine.func(u): return u.label;
+		case SubRoutine.subRoutine(label): return label;
+		}
 	}
 
 	static function listSubroutines(sequence:Instruction): Array<SubRoutine> {
