@@ -1,5 +1,6 @@
 import js.Node;
 import Compiler;
+using Mixin;
 
 class Set<K> {
 	var map: Map<K,Bool>;
@@ -21,6 +22,7 @@ class Set<K> {
 	}
 }
 
+
 typedef Subst = Instruction;
 
 class Flow {
@@ -37,13 +39,11 @@ class Flow {
 
 	public function flow() {
 		this.init();
-		var updated;
-		do {
-			updated = false;
-			for (insn in eachInsn()) {
-				if (increase(insn)) updated = true;
-			}
-		} while (updated);
+		var q = [for (insn in eachInsn()) insn];
+		while (q.length > 0) {
+			var insn = q.shift();
+			increase(q, insn);
+		}
 		for (insn in eachInsn()) {
 			var substs = this.out[insn].toArray();
 			trace('${insn}: ${substs}');
@@ -62,19 +62,17 @@ class Flow {
 		};
 	}
 
-	function increase(insn:Instruction) {
-		var updated = false;
-
+	function increase(q:Array<Instruction>, insn:Instruction) {
 		for (i in this.prevs[insn]) {
-			if (merge(insn, this.in_[insn], this.out[i])) updated = true;
+			merge(insn, this.in_[insn], this.out[i]);
 		}
-		this.out[insn] = copy(this.gen[insn]);
 		for (i in this.in_[insn]) {
-			if (!this.kill[insn].has(i)) {
+			if (!this.out[insn].has(i) && !this.kill[insn].has(i)) {
+				log('${insn} ${i}');
 				this.out[insn].add(i);
+				q.pushAll(nextInsns(insn));
 			}
 		}
-		return updated;
 	}
 
 	static function copy(set: Set<Subst>) {
@@ -96,7 +94,7 @@ class Flow {
 		return updated;
 	}
 
-	static function log(x) {
+	static function log(x:Dynamic) {
 		trace(Std.string(x));
 	}
 
