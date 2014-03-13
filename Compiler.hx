@@ -36,8 +36,9 @@ class Compiler {
 			var opts = Compiler.convertInsn(i);
 			return new Instruction(opts, i.fileName, i.lineNumber, null);
 		});
-		for (i in 0...insnArray.length-1) {
+		for (i in 0...insnArray.length) {
 			insnArray[i].next = insnArray[i+1];
+			insnArray[i].id = i;
 		}
 		for (label in labels) {
 			label.insn = insnArray[label.pos];
@@ -139,6 +140,7 @@ class Instruction {
 	public var fileName: String;
 	public var lineNumber: Int;
 	public var next: Instruction;
+	public var id: Int;
 
 	public function new(opts: Insn, fileName: String, lineNumber: Int, next: Instruction) {
 		this.opts = opts;

@@ -33,29 +33,106 @@ class Set<K> {
 
 typedef Subst = Instruction;
 
+class Loc {
+	public var insn: Instruction;
+	public var returnAddress: Instruction;
+	public var subHead: Bool;
+	public var next: Array<Loc>;
+	public var prev: Array<Loc>;
+
+	public function new(insn, returnAddress, subHead) {
+		this.insn = insn;
+		this.returnAddress = returnAddress;
+		this.subHead = subHead;
+		untyped {
+			Object.defineProperty(this, "next", {enumerable: false, writable: true});
+			Object.defineProperty(this, "prev", {enumerable: false, writable: true});
+		}
+	}
+
+	public function step(insn) {
+		return new Loc(insn, this.returnAddress, false);
+	}
+}
+
 class Flow {
 	var sequence: Instruction;
-	var kill: Map<Instruction,Set<Subst>>;
-	var gen: Map<Instruction,Set<Subst>>;
-	var in_: Map<Instruction,Set<Subst>>;
-	var out: Map<Instruction,Set<Subst>>;
-	var prevs: Map<Instruction,Set<Instruction>>;
+	var locs: Array<Loc>;
 
 	public function new(sequence) {
 		this.sequence = sequence;
 	}
 
 	public function flow() {
-		this.init();
-		var q = [for (insn in eachInsn()) insn];
+		makeLocSequence();	
+		log(this.locs);
+	}
+
+	function makeLocSequence() {
+		function key(loc:Loc) {
+			if (loc.returnAddress == null) return '${loc.insn.id}';
+			return loc.insn.id+","+loc.returnAddress.id;
+		}
+
+		var locs = new Map<String,Loc>();
+		var q = [new Loc(this.sequence, null, false)];
 		while (q.length > 0) {
-			var insn = q.shift();
-			increase(q, insn);
+			var loc = q.shift();
+			if (locs.exists(key(loc))) continue;
+			locs.set(key(loc), loc);
+			var next = nextInsns(loc.insn).map(function (insn) return loc.step(insn));
+			switch (loc.insn.opts) {
+			case Insn.Gosub(label):
+				next.push(new Loc(label.insn, loc.insn.next, true));
+			case Insn.Return(_):
+				next.push(new Loc(loc.returnAddress, true)); // Ç†ÅI
+			default:
+			}
+			q.pushAll(next);
+			loc.next = next;
 		}
-		for (insn in eachInsn()) {
-			var substs = this.out[insn].toArray();
-			trace('${insn}: ${substs}');
+		this.locs = Lambda.array(locs);
+	}
+
+	function nextInsns(insn:Instruction): Array<Instruction> {
+		switch (insn.opts) {
+		case Insn.Goto(label):
+			return [label.insn];
+		case Insn.Ifne(label):
+			return [label.insn, insn.next];
+		case Insn.Ifeq(label):
+			return [label.insn, insn.next];
+		case Insn.Return(_):
+			return [];
+		case Insn.Gosub(label):
+			return [];
+		default:
+			return [insn.next];
 		}
+	}
+
+	static function copy(set: Set<Subst>) {
+		var newSet = new Set<Subst>(new Map());
+		for (i in set) {
+			newSet.add(i);
+		}
+		return newSet;
+	}
+
+	static function merge(loc:Loc, a: Set<Subst>, b: Set<Subst>) {
+		var updated = false;
+		for (i in b) {
+			if (!a.has(i)) {
+				updated = true;
+				a.add(i);
+			}
+		}
+		return updated;
+	}
+
+
+	static function log(x:Dynamic) {
+		trace(Std.string(x));
 	}
 
 	function eachInsn() {
@@ -70,105 +147,6 @@ class Flow {
 		};
 	}
 
-	function increase(q:Array<Instruction>, insn:Instruction) {
-		for (i in this.prevs[insn]) {
-			merge(insn, this.in_[insn], this.out[i]);
-		}
-		for (i in this.in_[insn]) {
-			if (!this.out[insn].has(i) && !this.kill[insn].has(i)) {
-				this.out[insn].add(i);
-				q.pushAll(nextInsns(insn));
-			}
-		}
-	}
-
-	static function copy(set: Set<Subst>) {
-		var newSet = new Set<Subst>(new Map());
-		for (i in set) {
-			newSet.add(i);
-		}
-		return newSet;
-	}
-
-	static function merge(insn:Instruction, a: Set<Subst>, b: Set<Subst>) {
-		var updated = false;
-		for (i in b) {
-			if (!a.has(i)) {
-				updated = true;
-				a.add(i);
-			}
-		}
-		return updated;
-	}
-
-	static function log(x:Dynamic) {
-		trace(Std.string(x));
-	}
-
-	function init() {
-		this.makeKillGen();
-		this.makePrevs();
-		var insn = this.sequence;
-		this.in_ = new Map();
-		this.out = new Map();
-		while (insn != null) {
-			this.in_[insn] = new Set(new Map());
-			this.out[insn] = copy(this.gen[insn]);
-			insn = insn.next;
-		}
-	}
-
-	function makePrevs() {
-		this.prevs = new Map();
-		var insn = this.sequence;
-		while (insn != null) {
-			this.prevs[insn] = new Set(new Map());
-			insn = insn.next;
-		}
-		var insn = this.sequence;
-		while (insn != null) {
-			for (i in this.nextInsns(insn)) {
-				this.prevs[i].add(insn);
-			}
-			insn = insn.next;
-		}
-	}
-
-	function nextInsns(insn:Instruction): Array<Instruction> {
-		switch (insn.opts) {
-		case Insn.Goto(label):
-			return [label.insn];
-		case Insn.Ifne(label):
-			return [label.insn, insn.next];
-		case Insn.Ifeq(label):
-			return [label.insn, insn.next];
-		default:
-			return [insn.next];
-		}
-	}
-	
-	function makeKillGen() {
-		this.kill = new Map();
-		this.gen = new Map();
-		var insn = this.sequence;
-		var substs = new Map<Int, Array<Instruction>>();
-		for (insn in eachInsn()) {
-			this.gen[insn] = new Set(new Map());
-			this.kill[insn] = new Set(new Map());
-			switch (insn.opts) {
-			case Insn.Assign_static_var(id, _):
-				substs.pushAt(id, insn);
-			default:
-			}
-		}
-		for (id in substs.keys()) {
-			for (insn in substs[id]) {
-				this.gen[insn].add(insn);
-				this.kill[insn].addAll(substs[id]);
-				this.kill[insn].remove(insn);
-			}
-		}
-	}
 }
 
 class T {
