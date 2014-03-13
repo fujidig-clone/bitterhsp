@@ -2,16 +2,16 @@ Index: codegen.cpp
 ===================================================================
 --- codegen.cpp	(revision 617)
 +++ codegen.cpp	(working copy)
-@@ -2610,7 +2610,29 @@
- 	}
+@@ -2611,6 +2611,29 @@
  }
+ 
  
 +// ラベル名の情報を出力する
 +void CToken::PutDILabels( void )
 +{
 +	int num = ot_buf->GetSize() / sizeof(int);
-+	int table[num];
-+	std::fill(table, table + num, -1);
++	int *table = new int[num];
++	for (int i = 0; i < num; i++) table[i] = -1;
 +	for (int i = 0; i < lb->GetNumEntry(); i++) {
 +		if (lb->GetType(i) == TYPE_LABEL) {
 +			int id = lb->GetOpt(i);
@@ -19,27 +19,29 @@ Index: codegen.cpp
 +		}
 +	}
 +	di_buf->Put((unsigned char)255);
-+	di_buf->Put((unsigned char)254);
 +	for (int i = 0; i < num; i ++) {
 +		if (table[i] == -1) continue;
 +		char *name = lb->GetName(table[i]);
 +		int dsPos = PutDS(name);
-+		PutDI(253, dsPos, i);
++		PutDI(251, dsPos, i);
 +	}
++	delete[] table;
 +}
- 
++
 +
  char *CToken::GetDS( int ptr )
  {
  	int i;
-@@ -2905,6 +2927,7 @@
- 		}
+@@ -2906,6 +2929,9 @@
  		if (( cg_debug )||( cg_putvars )) {
  			PutDIVars();
-+			PutDILabels();
  		}
++		if ( cg_debug ) {
++			PutDILabels();
++		}
  		PutDI( -1, 0, 0 );								// デバッグ情報終端
  
+ 		sz_hed = sizeof(HSPHED);
 Index: token.h
 ===================================================================
 --- token.h	(revision 617)

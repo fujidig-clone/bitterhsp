@@ -167,11 +167,10 @@ module BitterHSP {
 
         private createLabelNames(dinfo: BinaryReader): Array<string> {
             var labelNames = new Array<string>(this.ot.length / 4);
-            if (dinfo.readUint8() != 254) return [];
             while (true) {
                 var ofs = dinfo.readUint8();
                 if (ofs == 255) break;
-                if (ofs != 253) return [];
+                if (ofs != 251) return [];
                 var dsPos = dinfo.readUint24();
                 var i = dinfo.readUint16();
                 labelNames[i] = this.getDSStr(dsPos);
