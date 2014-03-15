@@ -38,7 +38,7 @@ class Compiler {
 	}
 
 	public function compile(): CompileResult {
-		while(this.tokensPos < this.ax.tokens.length) {
+		while (this.tokensPos < this.ax.tokens.length) {
 			this.compileStatement();
 		}
 		for (i in 0...sequence.length) {
@@ -134,14 +134,14 @@ class Compiler {
 		}
 		if (token.val != 8) { // CALCCODE_EQ
 			// 複合代入
-			var argc = this.compileParameters(true, true);
+			var argc = this.compileParameters(true);
 			if (argc != 1) {
 				throw this.error("複合代入のパラメータの数が間違っています。", token);
 			}
 			this.pushNewInsn(Insn.Compound_assign(token.val), token);
 			return;
 		}
-		var argc = this.compileParameters(true, true);
+		var argc = this.compileParameters(true);
 		if (argc == 0) {
 			throw this.error("代入のパラメータの数が間違っています。", token);
 		}
@@ -317,7 +317,7 @@ class Compiler {
 		var skipTo = token.pos + token.size + token.skipOffset;
 		var label = new Label();
 		this.ifLabels.pushAt(skipTo, label);
-		var argc = this.compileParameters(true, true);
+		var argc = this.compileParameters(true);
 		if (token.code == 0) { // 'if'
 			if (argc != 1) throw this.error("if の引数の数が間違っています。", token);
 			this.pushNewInsn(Insn.Ifeq(label), token);
@@ -344,7 +344,7 @@ class Compiler {
 			throw this.error("ラベル名が指定されていません");
 		}
 	}
-	function compileParameters(cannotBeOmitted = false, notReceiveVar = false): Int {
+	function compileParameters(cannotBeOmitted = false): Int {
 		var argc = 0;
 		if (this.ax.tokens[this.tokensPos].ex2) {
 			if (cannotBeOmitted) {
@@ -353,12 +353,12 @@ class Compiler {
 			this.pushNewInsn(Insn.Push_default);
 			argc ++;
 		}
-		argc += this.compileParametersSub(cannotBeOmitted, notReceiveVar);
+		argc += this.compileParametersSub(cannotBeOmitted);
 		return argc;
 	}
-	function compileParametersSub(cannotBeOmitted = false, notReceiveVar = false): Int {
+	function compileParametersSub(cannotBeOmitted = false): Int {
 		var argc = 0;
-		while(true) {
+		while (true) {
 			var token = this.ax.tokens[this.tokensPos];
 			if (token == null || token.ex1) return argc;
 			if (token.type == TokenType.MARK) {
@@ -376,20 +376,12 @@ class Compiler {
 				}
 			}
 			argc ++;
-			this.compileParameter(notReceiveVar);
+			this.compileParameter();
 		}
 	}
-	/*
-	notReceiveVar: パラメータが変数として受け取られうることがない (bool)
-	dim や peek などの関数はパラメータを値としてではなく変数として受け取る。
-	そのためにパラメータが単一の変数の場合は変数を表すオブジェクトをスタックに積む。
-	でも、変数として受け取ることがないパラメータの場合、それは無駄である。
-	このパラメータを true にすれば値そのものを積む命令を生成する。
-	
-	*/
-	function compileParameter(notReceiveVar = false) {
+	function compileParameter() {
 		var headPos = this.tokensPos;
-		while(true) {
+		while (true) {
 			var token = this.ax.tokens[this.tokensPos];
 			if (token == null || token.ex1) return;
 			switch(token.type) {
@@ -399,8 +391,7 @@ class Compiler {
 				}
 				this.compileOperator();
 			case TokenType.VAR:
-				var useValue = notReceiveVar || !this.isOnlyVar(this.tokensPos, headPos);
-				this.compileStaticVariable(useValue);
+				this.compileStaticVariable();
 			case TokenType.STRING:
 				this.pushNewInsn(Insn.Push_string(token.stringValue));
 				this.tokensPos ++;
@@ -411,8 +402,7 @@ class Compiler {
 				this.pushNewInsn(Insn.Push_int(token.val));
 				this.tokensPos ++;
 			case TokenType.STRUCT:
-				var useValue = notReceiveVar || !this.isOnlyVar(this.tokensPos, headPos);
-				this.compileStruct(useValue);
+				this.compileStruct();
 			case TokenType.LABEL:
 				this.pushNewInsn(Insn.Push_label(this.labels[token.code]));
 				this.tokensPos ++;
@@ -430,58 +420,6 @@ class Compiler {
 			token = this.ax.tokens[this.tokensPos];
 			if (token != null && token.ex2) return;
 		}
-	}
-	function isOnlyVar(pos: Int, headPos: Int): Bool {
-		if (pos != headPos) return false;
-		var nextTokenPos = pos + 1;
-		nextTokenPos += this.skipParenAndParameters(nextTokenPos);
-		var nextToken = this.ax.tokens[nextTokenPos];
-		return (nextToken == null || nextToken.ex1 || nextToken.ex2 || this.isRightParenToken(nextToken));
-	}
-	function skipParameter(pos: Int): Int {
-		var size = 0;
-		var parenLevel = 0;
-		while(true) {
-			var token = this.ax.tokens[pos + size];
-			if (token == null || token.ex1) return size;
-			if (token.type == TokenType.MARK) {
-				switch(token.val) {
-				case 40:
-					parenLevel ++;
-				case 41:
-					if (parenLevel == 0) return size;
-					parenLevel --;
-				case 63:
-					return size + 1;
-				}
-			}
-			size ++;
-			token = this.ax.tokens[pos + size];
-			if (parenLevel == 0 && token != null && token.ex2) {
-				return size;
-			}
-		}
-	}
-	function skipParameters(pos: Int): Int {
-		var skipped = 0;
-		var size = 0;
-		while((skipped = this.skipParameter(pos + size)) != 0) {
-			size += skipped;
-		}
-		return size;
-	}
-	function skipParenAndParameters(pos: Int): Int {
-		var parenToken = this.ax.tokens[pos];
-		if (!(parenToken != null && parenToken.type == TokenType.MARK && parenToken.code == 40)) {
-			return 0;
-		}
-		var size = 1;
-		size += this.skipParameters(pos + size);
-		parenToken = this.ax.tokens[pos + size];
-		if (!(parenToken != null && parenToken.type == TokenType.MARK && parenToken.code == 41)) {
-			throw this.error('関数パラメータの後ろに閉じ括弧がありません。', parenToken);
-		}
-		return size + 1;
 	}
 	function compileOperator() {
 		var OP_INSN = [Insn.Add, Insn.Sub, Insn.Mul, Insn.Div, Insn.Mod,
@@ -502,11 +440,11 @@ class Compiler {
 			this.compileSysvar();
 		}
 	}
-	function compileStruct(useGetVar: Bool) {
+	function compileStruct() {
 		var token = this.ax.tokens[this.tokensPos];
 		var prmInfo = this.ax.prmsInfo[token.code];
 		if (this.getProxyVarType() != null) {
-			this.compileProxyVariable(useGetVar);
+			this.compileProxyVariable();
 		} else if (token.type == -1) {
 			this.tokensPos ++;
 			this.pushNewInsn(Insn.Thismod, token);
@@ -610,16 +548,12 @@ class Compiler {
 		}
 		throw this.error('変数が指定されていません');
 	}
-	function compileStaticVariable(useValue = false) {
+	function compileStaticVariable() {
 		var token = this.ax.tokens[this.tokensPos++];
 		var argc = this.compileVariableSubscript();
-		if (useValue) {
-			this.pushNewInsn(Insn.Get_var(token.code, argc), token);
-		} else {
-			this.pushNewInsn(Insn.Push_var(token.code, argc), token);
-		}
+		this.pushNewInsn(Insn.Push_var(token.code, argc), token);
 	}
-	function compileProxyVariable(useValue = false) {
+	function compileProxyVariable() {
 		var proxyVarType = this.getProxyVarType();
 		var token = this.ax.tokens[this.tokensPos++];
 		var prmInfo = this.ax.prmsInfo[token.code];
@@ -628,21 +562,13 @@ class Compiler {
 		case ProxyVarType.MEMBER:
 			var argc = this.compileVariableSubscript();
 			var id = token.code - funcInfo.prmindex - 1;
-			if (useValue) {
-				this.pushNewInsn(Insn.Get_member(id, argc), token);
-			} else {
-				this.pushNewInsn(Insn.Push_member(id, argc), token);
-			}
+			this.pushNewInsn(Insn.Push_member(id, argc), token);
 		case ProxyVarType.ARG_VAR:
 			this.pushNewInsn(Insn.Getarg(token.code - funcInfo.prmindex), token);
 		case ProxyVarType.ARG_ARRAY, ProxyVarType.ARG_LOCAL:
 			var id = token.code - funcInfo.prmindex;
 			var argc = this.compileVariableSubscript();
-			if (useValue) {
-				this.pushNewInsn(Insn.Get_arg_var(id, argc), token);
-			} else {
-				this.pushNewInsn(Insn.Push_arg_var(id, argc), token);
-			}
+			this.pushNewInsn(Insn.Push_arg_var(id, argc), token);
 		default:
 			throw ""; // proxyVarType == nullとなるときに呼び出してはいけない
 		}
@@ -683,7 +609,7 @@ class Compiler {
 		var parenToken = this.ax.tokens[this.tokensPos];
 		if (parenToken != null && parenToken.type == TokenType.MARK && parenToken.code == 40) {
 			this.tokensPos ++;
-			argc = this.compileParameters(true, true);
+			argc = this.compileParameters(true);
 			if (argc == 0) {
 				throw this.error('配列変数の添字が空です', parenToken);
 			}
@@ -726,7 +652,6 @@ enum Insn {
 	Push_label(x:Label);
 	Push_default;
 	Push_var(id:Int, argc:Int);
-	Get_var(id:Int, argc:Int);
 	Pop;
 	Pop_n(n:Int);
 	Dup;
@@ -760,9 +685,7 @@ enum Insn {
 	Call_userdef_func(userDefFunc:UserDefFunc, argc:Int);
 	Getarg(id:Int);
 	Push_arg_var(id:Int, indicesCount:Int);
-	Get_arg_var(id:Int, indicesCount:Int);
 	Push_member(id:Int, indicesCount:Int);
-	Get_member(id:Int, indicesCount:Int);
 	Thismod;
 	Newmod(module:Module, argc:Int);
 	Return(hasReturnValue:Bool);
