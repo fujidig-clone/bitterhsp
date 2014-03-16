@@ -89,8 +89,6 @@ class Toy1 {
 				labelsSet.add(label);
 			case Insn.On(labels,isGosub=true):
 				for (label in labels) labelsSet.add(label);
-			case Insn.Call_builtin_handler_cmd(_,_,isGosub=true,label,_):
-				labelsSet.add(label);
 			default:
 			}
 		}

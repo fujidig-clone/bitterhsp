@@ -290,9 +290,8 @@ class Compiler {
 		     0x04: // oncmd
 			this.tokensPos ++;
 			var isGosub = this.readJumpType(true);
-			var label = this.readLabelLiteral();
 			var argc = this.compileParametersSub();
-			this.pushNewInsn(Insn.Call_builtin_handler_cmd(token.type, token.code, isGosub, label, argc), token);
+			this.pushNewInsn(Insn.Call_builtin_handler_cmd(token.type, token.code, isGosub, argc), token);
 		default:
 			this.compileCommand();
 		}
@@ -304,8 +303,7 @@ class Compiler {
 			this.tokensPos ++;
 			var isGosub = this.readJumpType(true);
 			var argc = this.compileParameters();
-			var label = this.popLabelInsn();
-			this.pushNewInsn(Insn.Call_builtin_handler_cmd(token.type, token.code, isGosub, label, argc - 1), token);
+			this.pushNewInsn(Insn.Call_builtin_handler_cmd(token.type, token.code, isGosub, argc), token);
 		default:
 			this.compileCommand();
 		}
@@ -711,7 +709,7 @@ enum Insn {
 	Dec;
 	Call_builtin_cmd(type:Int, code:Int, argc:Int);
 	Call_builtin_func(type:Int, code:Int, argc:Int);
-	Call_builtin_handler_cmd(type:Int, code:Int, isGosub:Bool, label:Label, argc:Int);
+	Call_builtin_handler_cmd(type:Int, code:Int, isGosub:Bool, argc:Int);
 	Call_userdef_cmd(userDefFunc:UserDefFunc, argc:Int);
 	Call_userdef_func(userDefFunc:UserDefFunc, argc:Int);
 	Getarg(id:Int);
