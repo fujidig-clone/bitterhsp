@@ -114,10 +114,8 @@ class Compiler {
 			this.compileBasicCommand();
 		case TokenType.EXTCMD:
 			this.compileGuiCommand();
-		case TokenType.DLLFUNC, TokenType.DLLCTRL:
-			this.compileCommand();
 		default:
-			throw this.error("命令コード " + token.type + " は解釈できません。");
+			this.compileCommand();
 		}
 	}
 	function compileAssignment() {
@@ -417,10 +415,8 @@ class Compiler {
 				this.compileSysvar();
 			case TokenType.MODCMD:
 				this.compileUserDefFuncall();
-			case TokenType.INTFUNC, TokenType.DLLFUNC, TokenType.DLLCTRL:
-				this.compileFuncall();
 			default:
-				throw this.error("命令コード " + token.type + " は解釈できません。");
+				this.compileFuncall();
 			}
 			token = this.ax.tokens[this.tokensPos];
 			if (token != null && token.ex2) return;
