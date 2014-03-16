@@ -51,6 +51,8 @@ class Toy1 {
 		return dup;
 	}
 	function copyProcedureBody(insn:Instruction, copied:Map<Instruction,Instruction>) {
+		// [XXX] 深さ優先探索だとスタックを食いつぶしてしまうかもしれないから
+		// 幅優先探索にした方がよい
 		if (copied[insn] != null) return copied[insn];
 		var newInsn = new Instruction(insn.opts, insn.fileName, insn.lineNumber, null, insn.origPos);
 		copied[insn] = newInsn;
