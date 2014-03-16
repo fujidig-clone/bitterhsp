@@ -17,9 +17,12 @@ class Compiler {
 	var sequence: Array<Instruction> = [];
 
 	public static function main() {
-		var path = "t.ax";
-		var binary: String;
-		untyped { binary = require("fs").readFileSync(path).toString("binary"); }
+		var path, binary: String;
+		untyped {
+			path = process.argv[2];
+			if (path == null) path = "t.ax";
+			binary = require("fs").readFileSync(path).toString("binary");
+		}
 		var compiler = new Compiler(binary);
 		var compiled = compiler.compile();
 		var insn = compiled.sequence;
@@ -31,13 +34,15 @@ class Compiler {
 
 	public function new(data: String) {
 		var ax = this.ax = new AXData(data);
-		this.labels = []; // HSP のラベルIDに対応したラベル
-		for (i in 0...ax.labels.length) {
-			this.labels[i] = new Label(ax.labelNames[i]);
-		}
 	}
 
 	public function compile(): CompileResult {
+		this.labels = []; // HSP のラベルIDに対応したラベル
+		for (i in 0...ax.labels.length) {
+			this.labels[i] = new Label(null, ax.labelNames[i]);
+		}
+		for (i in 0...this.ax.funcsInfo.length) this.buildUserDefFunc(i);
+		for (i in 0...this.ax.funcsInfo.length) this.buildModule(i);
 		while (this.tokensPos < this.ax.tokens.length) {
 			this.compileStatement();
 		}
@@ -62,7 +67,7 @@ class Compiler {
 	}
 	function pushNewInsn(opts: Insn, ?token: Token) {
 		if (token == null) token = this.ax.tokens[this.tokensPos];
-		this.sequence.push(new Instruction(opts, token.fileName, token.lineNumber, null));
+		this.sequence.push(new Instruction(opts, token.fileName, token.lineNumber, null, this.tokensPos));
 	}
 	function getFinfoIdByMinfoId(minfoId: Int): Int {
 		var funcsInfo = this.ax.funcsInfo;
@@ -487,29 +492,39 @@ class Compiler {
 	}
 	function getUserDefFunc(finfoId: Int): UserDefFunc {
 		var func = this.userDefFuncs[finfoId];
-		if (func != null) return func;
+		if (func == null) {
+			throw this.error();
+		}
+		return func;
+	}
+	function buildUserDefFunc(finfoId: Int) {
 		var funcInfo = this.ax.funcsInfo[finfoId];
 		if (funcInfo.index != -1 && funcInfo.index != -2) { // STRUCTDAT_INDEX_FUNC, STRUCTDAT_INDEX_CFUNC
-			throw this.error();
+			return;
 		}
 		var isCType = funcInfo.index == -2;
 		var paramTypes: Array<Int> = [];
 		for (i in 0...funcInfo.prmmax) {
 			paramTypes[i] = this.ax.prmsInfo[funcInfo.prmindex + i].mptype;
 		}
-		return this.userDefFuncs[finfoId] = new UserDefFunc(isCType, funcInfo.name, this.labels[funcInfo.otindex], paramTypes, finfoId);
+		this.userDefFuncs[finfoId] = new UserDefFunc(isCType, funcInfo.name, this.labels[funcInfo.otindex], paramTypes, finfoId);
 	}
 	function getModule(finfoId: Int): Module {
 		var module = this.modules[finfoId];
-		if (module != null) return module;
+		if (module == null) {
+			throw this.error();
+		}
+		return module;
+	}
+	function buildModule(finfoId: Int) {
 		var funcInfo = this.ax.funcsInfo[finfoId];
 		if (funcInfo.index != -3) { // STRUCTDAT_INDEX_STRUCT
-			throw this.error();
+			return;
 		}
 		var destructor = funcInfo.otindex != 0 ? this.getUserDefFunc(funcInfo.otindex) : null;
 		var constructorFinfoId = this.ax.prmsInfo[funcInfo.prmindex].offset;
 		var constructor = constructorFinfoId != -1 ? this.getUserDefFunc(constructorFinfoId) : null;
-		return this.modules[finfoId] = new Module(funcInfo.name, constructor, destructor, funcInfo.prmmax - 1, finfoId);
+		this.modules[finfoId] = new Module(funcInfo.name, constructor, destructor, funcInfo.prmmax - 1, finfoId);
 	}
 	function compileFuncall() {
 		var token = this.ax.tokens[this.tokensPos++];
@@ -627,12 +642,14 @@ class Instruction {
 	public var fileName: String;
 	public var lineNumber: Int;
 	public var next: Instruction;
+	public var origPos: Int;
 
-	public function new(opts: Insn, fileName: String, lineNumber: Int, next: Instruction) {
+	public function new(opts: Insn, fileName: String, lineNumber: Int, next: Instruction, origPos: Int) {
 		this.opts = opts;
 		this.fileName = fileName;
 		this.lineNumber = lineNumber;
 		this.next = next;
+		this.origPos = origPos;
 #if debug
 		// Std.stringの出力にnextプロパティが出てこないようにする
 		untyped { Object.defineProperty(this, "next", {enumerable: false, writable: true}); }
@@ -706,13 +723,13 @@ enum Insn {
 
 class Label {
 	public var pos:Int;
-	public var name:String;
 	public var insn:Instruction;
+	public var name:String;
 
-	public function new(name = null) {
+	public function new(insn = null, name = null) {
 		this.pos = -1;
+		this.insn = insn;
 		this.name = name;
-		this.insn = null;
 	}
 
 	public function toString() {

@@ -166,7 +166,7 @@ class AXData {
 
 	function createLabelNames(dinfo: BinaryReader): Array<String> {
 		var labelNames: Array<String> = [];
-		while (true) {
+		while (!dinfo.isEOS()) {
 			var ofs = dinfo.readUint8();
 			if (ofs == 255) break;
 			if (ofs != 251) return [];
