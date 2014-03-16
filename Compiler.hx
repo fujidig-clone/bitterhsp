@@ -415,6 +415,8 @@ class Compiler {
 				this.compileSysvar();
 			case TokenType.MODCMD:
 				this.compileUserDefFuncall();
+			case TokenType.INTFUNC:
+				this.compileIntFuncall();
 			default:
 				this.compileFuncall();
 			}
@@ -521,6 +523,22 @@ class Compiler {
 		var constructorFinfoId = this.ax.prmsInfo[funcInfo.prmindex].offset;
 		var constructor = constructorFinfoId != -1 ? this.getUserDefFunc(constructorFinfoId) : null;
 		this.modules[finfoId] = new Module(funcInfo.name, constructor, destructor, funcInfo.prmmax - 1, finfoId);
+	}
+	function compileIntFuncall() {
+		var token = this.ax.tokens[this.tokensPos];
+		if (token.code == 0x0c) { // varptr
+			var token_1 = this.ax.tokens[this.tokensPos+1];
+			var token_2 = this.ax.tokens[this.tokensPos+2];
+			var token_3 = this.ax.tokens[this.tokensPos+3];
+			if (this.isLeftParenToken(token_1) && token_2.type == TokenType.DLLFUNC && this.isRightParenToken(token_3)) {
+				this.pushNewInsn(Insn.Push_int(token_2.val));
+				this.pushNewInsn(Insn.Call_builtin_func(token.type, token.code, 1), token);
+				this.tokensPos += 4;
+				return;
+
+			}
+		}
+		this.compileFuncall();
 	}
 	function compileFuncall() {
 		var token = this.ax.tokens[this.tokensPos++];
