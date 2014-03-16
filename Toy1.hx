@@ -1,4 +1,5 @@
 import Compiler;
+import AXData;
 import Set;
 
 class Toy1 {
@@ -31,6 +32,8 @@ class Toy1 {
 	}
 	function copy() {
 		var used = new Set(new Map());
+		// [XXX] ProcedureをキーにしたMapを使うとEnumValueMapが使われて
+		// 動作がおかしいのでかりそめとしてStringをキーにする
 		var dup = new Map<String,Int>();
 		for (p in this.procedures) {
 			var copied = new Map();
@@ -62,6 +65,9 @@ class Toy1 {
 			newInsn.next = copyProcedureBody(insn.next, copied);
 		case Insn.Return:
 			// do nothing
+		case Insn.Call_builtin_cmd(TokenType.PROGCMD, 0x10, _), // end
+		     Insn.Call_builtin_cmd(TokenType.PROGCMD, 0x11, _): // stop
+			// do nothing
 		default:
 			newInsn.next = copyProcedureBody(insn.next, copied);
 		}
@@ -91,6 +97,8 @@ class Toy1 {
 		return labelsSet.toArray();
 	}
 	static function setProcHead(proc: Procedure, insn: Instruction) {
+		// ラベルのinsnプロパティを書き換えることによって
+		// すべての呼び出し元の飛び先も変わる。ハッキーかも
 		switch (proc) {
 		case Procedure.func(u):
 			u.label.insn = insn;
