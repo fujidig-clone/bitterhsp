@@ -17,7 +17,7 @@ class Toy1 {
 	public function main_() {
 		var dup = copy();
 		for (p in this.procedures) {
-			trace('${procName(p)}: ${dup[procName(p)]}');
+			trace('${p.name}: ${dup[p]}');
 		}
 	}
 
@@ -32,21 +32,20 @@ class Toy1 {
 	}
 	function copy() {
 		var used = new Set(new Map());
-		// [XXX] ProcedureをキーにしたMapを使うとEnumValueMapが使われて
-		// 動作がおかしいのでかりそめとしてStringをキーにする
-		var dup = new Map<String,Int>();
+		var dup = new Map<Procedure,Int>();
 		for (p in this.procedures) {
 			var copied = new Map();
-			var newHead = copyProcedureBody(procHead(p), copied);
-			var name = procName(p);
-			dup[name] = 0;
+			var newHead = copyProcedureBody(p.insn(), copied);
+			dup[p] = 0;
 			for (i in copied.keys()) {
 				if (used.has(i)) {
-					dup[name] += 1;
+					dup[p] += 1;
 				}
 				used.add(i);
 			}
-			setProcHead(p, newHead);
+			// ラベルのinsnプロパティを書き換えることによって
+			// すべての呼び出し元の飛び先も変わる。ハッキーかも
+			p.label.insn = newHead;
 		}
 		return dup;
 	}
@@ -76,11 +75,11 @@ class Toy1 {
 		return newInsn;
 	}
 	function listProcedures() {
-		var main = Procedure.subRoutine(new Label(this.sequence, "(main)"));
-		var subRoutines = [for (s in listSubroutines()) Procedure.subRoutine(s)];
-		var funcs = [for (f in this.userDefFuncs) Procedure.func(f)];
+		var main = new Procedure(null, new Label(this.sequence), "(main)");
+		var subRoutines = [for (l in listSubroutines()) new Procedure(null, l, "*"+l.name)];
+		var funcs = [for (f in this.userDefFuncs) new Procedure(f, f.label, f.name)];
 		var procs = [main].concat(subRoutines).concat(funcs);
-		procs.sort(function (a, b) return procHead(a).origPos - procHead(b).origPos);
+		procs.sort(function (a, b) return a.insn().origPos - b.insn().origPos);
 		return procs;
 	}
 	function listSubroutines(): Array<Label> {
@@ -96,32 +95,6 @@ class Toy1 {
 		}
 		return labelsSet.toArray();
 	}
-	static function setProcHead(proc: Procedure, insn: Instruction) {
-		// ラベルのinsnプロパティを書き換えることによって
-		// すべての呼び出し元の飛び先も変わる。ハッキーかも
-		switch (proc) {
-		case Procedure.func(u):
-			u.label.insn = insn;
-		case Procedure.subRoutine(l):
-			l.insn = insn;
-		}
-	}
-	static function procHead(proc: Procedure) {
-		switch (proc) {
-		case Procedure.func(u):
-			return u.label.insn;
-		case Procedure.subRoutine(l):
-			return l.insn;
-		}
-	}
-	static function procName(proc: Procedure) {
-		switch (proc) {
-		case Procedure.func(u):
-			return u.name;
-		case Procedure.subRoutine(l):
-			return "*"+l.name;
-		}
-	}
 	function eachInsn() {
 		var insn = this.sequence;
 		return {
@@ -135,8 +108,18 @@ class Toy1 {
 	}
 }
 
-enum Procedure {
-	func(userDefFunc:UserDefFunc);
-	subRoutine(label:Label);
-}
+class Procedure {
+	public var userDefFunc: UserDefFunc;
+	public var label: Label;
+	public var name: String;
 
+	public function new(userDefFunc, label, name) {
+		this.userDefFunc = userDefFunc;
+		this.label = label;
+		this.name = name;
+	}
+
+	public function insn() {
+		return this.label.insn;
+	}
+}
