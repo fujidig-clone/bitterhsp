@@ -415,6 +415,8 @@ class Compiler {
 				this.compileUserDefFuncall();
 			case TokenType.INTFUNC:
 				this.compileIntFuncall();
+			case TokenType.DLLCTRL:
+				this.compileDllctrlCall();
 			default:
 				this.compileFuncall();
 			}
@@ -537,6 +539,14 @@ class Compiler {
 			}
 		}
 		this.compileFuncall();
+	}
+	function compileDllctrlCall() {
+		var token = this.ax.tokens[this.tokensPos];
+		if (token.code >= 0x1000) {
+			this.compileSysvar();
+		} else {
+			this.compileFuncall();
+		}
 	}
 	function compileFuncall() {
 		var token = this.ax.tokens[this.tokensPos++];
