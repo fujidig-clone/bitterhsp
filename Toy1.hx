@@ -74,7 +74,7 @@ class Toy1 {
 			return [u.label];
 		case Insn.Gosub(label):
 			return [label];
-		case Insn.On(labels,isGosub=true):
+		case Insn.On(labels,JumpType.Gosub):
 			return labels;
 		default:
 			return [];
@@ -142,7 +142,7 @@ class Toy1 {
 			switch(insn.opts) {
 			case Insn.Gosub(label):
 				labelsSet.add(label);
-			case Insn.On(labels,isGosub=true):
+			case Insn.On(labels,JumpType.Gosub):
 				for (label in labels) labelsSet.add(label);
 			default:
 			}

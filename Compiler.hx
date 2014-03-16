@@ -269,19 +269,23 @@ class Compiler {
 				throw this.error('パラメータは省略できません', token);
 			}
 			this.compileParameter();
-			var isGosub = this.readJumpType(false);
+			var jumpType = this.readJumpType();
+			if (jumpType == null) {
+				throw this.error('goto / gosubが指定されていません');
+			}
 			var argc = this.compileParametersSub();
 			var labels: Array<Label> = [];
 			for (i in 0...argc) {
 				labels.unshift(this.popLabelInsn());
 			}
-			this.pushNewInsn(Insn.On(labels, isGosub), token);
+			this.pushNewInsn(Insn.On(labels, jumpType), token);
 		default:
 			this.compileCommand();
 		}
 	}
 	function compileBasicCommand() {
 		var token = this.ax.tokens[this.tokensPos];
+		var posBak = this.tokensPos;
 		switch(token.code) {
 		case 0x00, // onexit
 		     0x01, // onerror
@@ -289,9 +293,19 @@ class Compiler {
 		     0x03, // onclick
 		     0x04: // oncmd
 			this.tokensPos ++;
-			var isGosub = this.readJumpType(true);
+			var jumpType = this.readJumpType();
+			var label = this.readLabelLiteral();
+			if (jumpType != null && label == null) {
+				throw this.error("ラベル名が指定されていません");
+			}
+			if (label == null) {
+				this.tokensPos = posBak;
+				this.compileCommand();
+				return;
+			}
+			if (jumpType == null) jumpType = JumpType.Goto;
 			var argc = this.compileParametersSub();
-			this.pushNewInsn(Insn.Call_builtin_handler_cmd(token.type, token.code, isGosub, argc), token);
+			this.pushNewInsn(Insn.Call_builtin_handler_cmd(token.type, token.code, jumpType, label, argc), token);
 		default:
 			this.compileCommand();
 		}
@@ -301,9 +315,11 @@ class Compiler {
 		switch(token.code) {
 		case 0x00: // button
 			this.tokensPos ++;
-			var isGosub = this.readJumpType(true);
+			var jumpType = this.readJumpType();
+			if (jumpType == null) jumpType = JumpType.Goto;
 			var argc = this.compileParameters();
-			this.pushNewInsn(Insn.Call_builtin_handler_cmd(token.type, token.code, isGosub, argc), token);
+			var label = this.popLabelInsn();
+			this.pushNewInsn(Insn.Call_builtin_handler_cmd(token.type, token.code, jumpType, label, argc - 1), token);
 		default:
 			this.compileCommand();
 		}
@@ -342,7 +358,7 @@ class Compiler {
 		if (token.type == TokenType.LABEL && (nextToken == null || nextToken.ex1 || nextToken.ex2)) {
 			return this.labels[token.code];
 		} else {
-			throw this.error("ラベル名が指定されていません");
+			return null;
 		}
 	}
 	function compileParameters(cannotBeOmitted = false): Int {
@@ -465,16 +481,13 @@ class Compiler {
 		}
 		this.pushNewInsn(Insn.Call_builtin_func(token.type, token.code, 0), token);
 	}
-	function readJumpType(optional: Bool): Bool {
+	function readJumpType(): JumpType {
 		var token = this.ax.tokens[this.tokensPos];
 		if (!token.ex1 && token.type == TokenType.PROGCMD && token.val <= 1) {
 			this.tokensPos ++;
-			return token.val == 1;
+			return token.val == 1 ? JumpType.Gosub : JumpType.Goto;
 		}
-		if (optional) {
-			return false;
-		}
-		throw this.error('goto / gosubが指定されていません');
+		return null;
 	}
 	function compileUserDefFuncall() {
 		var token = this.ax.tokens[this.tokensPos++];
@@ -719,7 +732,7 @@ enum Insn {
 	Dec;
 	Call_builtin_cmd(type:Int, code:Int, argc:Int);
 	Call_builtin_func(type:Int, code:Int, argc:Int);
-	Call_builtin_handler_cmd(type:Int, code:Int, isGosub:Bool, argc:Int);
+	Call_builtin_handler_cmd(type:Int, code:Int, jumpType:JumpType, label: Label, argc:Int);
 	Call_userdef_cmd(userDefFunc:UserDefFunc, argc:Int);
 	Call_userdef_func(userDefFunc:UserDefFunc, argc:Int);
 	Getarg(id:Int);
@@ -740,7 +753,12 @@ enum Insn {
 	Goto_expr;
 	Gosub_expr;
 	Exgoto(label:Label);
-	On(labels:Array<Label>, isGosub:Bool);
+	On(labels:Array<Label>, jumpType:JumpType);
+}
+
+enum JumpType {
+	Goto;
+	Gosub;
 }
 
 class Label {
