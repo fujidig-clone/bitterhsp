@@ -17,19 +17,71 @@ class Toy1 {
 	public function main_() {
 		var dup = copy();
 		for (p in this.procedures) {
-			trace('${p.name}: ${dup[p]}');
+			//trace('${p.name}: ${dup[p]}');
+		}
+		this.specialize();
+		for (p in this.procedures) {
+			trace('${p.name}: ${this.specialized[p]}');
 		}
 	}
 
 	var sequence: Instruction;
 	var userDefFuncs: Array<UserDefFunc>;
 	var procedures: Array<Procedure>;
+	var labelToProc = new Map<Label, Procedure>();
+
+	var specialized: Map<Procedure,Int>;
+	var history: Array<Procedure>;
 
 	public function new(compiled:CompileResult) {
 		this.sequence = compiled.sequence;
 		this.userDefFuncs = compiled.userDefFuncs.filter(function(x) return x != null);
 		this.procedures = listProcedures();
+		for (p in this.procedures) labelToProc[p.label] = p;
 	}
+	function specialize() {
+		this.history = [];
+		this.specialized = new Map();
+		for (p in this.procedures) {
+			this.specialized[p] = 0;
+		}
+		this.specialize0(this.procedures[0]);
+	}
+	function specialize0(p:Procedure) {
+		if (this.history.indexOf(p) >= 0) {
+			trace(p.name);
+			trace(p.insn().fileName);
+			throw new ThereIsRecursion();
+		}
+		this.specialized[p] += 1;
+		trace(p.name);
+		for (insn in p.insns) {
+			trace('${insn} ${getLabelsFromCallInsn(insn)}');
+			for (label in getLabelsFromCallInsn(insn)) {
+				var proc = this.labelToProc[label];
+				this.history.push(p);
+				specialize0(proc);
+				this.history.pop();
+			}
+		}
+	}
+
+	function getLabelsFromCallInsn(insn:Instruction) {
+		switch (insn.opts) {
+		case Insn.Call_userdef_cmd(u,_):
+			return [u.label];
+		case Insn.Call_userdef_func(u,_):
+			return [u.label];
+		case Insn.Gosub(label):
+			return [label];
+		case Insn.On(labels,isGosub=true):
+			return labels;
+		default:
+			return [];
+		}
+	}
+
+
 	function copy() {
 		var used = new Set(new Map());
 		var dup = new Map<Procedure,Int>();
@@ -37,11 +89,13 @@ class Toy1 {
 			var copied = new Map();
 			var newHead = copyProcedureBody(p.insn(), copied);
 			dup[p] = 0;
+			p.insns = [];
 			for (i in copied.keys()) {
 				if (used.has(i)) {
 					dup[p] += 1;
 				}
 				used.add(i);
+				p.insns.push(copied[i]);
 			}
 			// ラベルのinsnプロパティを書き換えることによって
 			// すべての呼び出し元の飛び先も変わる。ハッキーかも
@@ -108,10 +162,13 @@ class Toy1 {
 	}
 }
 
+class ThereIsRecursion { public function new() {} }
+
 class Procedure {
 	public var userDefFunc: UserDefFunc;
 	public var label: Label;
 	public var name: String;
+	public var insns: Array<Instruction>;
 
 	public function new(userDefFunc, label, name) {
 		this.userDefFunc = userDefFunc;
