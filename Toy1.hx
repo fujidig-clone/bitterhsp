@@ -15,8 +15,8 @@ class Toy1 {
 
 	public function main_() {
 		var dup = copy();
-		for (p in dup.keys()) {
-			trace('${procName(p)}: ${dup[p]}');
+		for (p in this.procedures) {
+			trace('${procName(p)}: ${dup[procName(p)]}');
 		}
 	}
 
@@ -31,14 +31,15 @@ class Toy1 {
 	}
 	function copy() {
 		var used = new Set(new Map());
-		var dup = new Map<Procedure,Int>();
+		var dup = new Map<String,Int>();
 		for (p in this.procedures) {
 			var copied = new Map();
 			var newHead = copyProcedureBody(procHead(p), copied);
-			dup[p] = 0;
+			var name = procName(p);
+			dup[name] = 0;
 			for (i in copied.keys()) {
 				if (used.has(i)) {
-					dup[p] += 1;
+					dup[name] += 1;
 				}
 				used.add(i);
 			}
