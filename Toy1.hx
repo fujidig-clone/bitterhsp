@@ -15,6 +15,8 @@ class Toy1 {
 	}
 
 	public function main_() {
+		collectHandlers();
+		return;
 		var dup = copy();
 		for (p in this.procedures) {
 			//trace('${p.name}: ${dup[p]}');
@@ -38,6 +40,21 @@ class Toy1 {
 		this.userDefFuncs = compiled.userDefFuncs.filter(function(x) return x != null);
 		this.procedures = listProcedures();
 		for (p in this.procedures) labelToProc[p.label] = p;
+	}
+	function collectHandlers() {
+		for (insn in eachInsn()) {
+			switch (insn.opts) {
+			case Insn.Call_builtin_handler_cmd(type,code,jumpType,label,argc):
+				trace('${type} ${code} ${jumpType} ${label.name}');
+			case Insn.Call_builtin_cmd(TokenType.PROGCMD, 0x11, _): // stop
+				trace('stop');
+			case Insn.Call_builtin_cmd(TokenType.PROGCMD, 0x07, _): // wait
+				trace('wait');
+			case Insn.Call_builtin_cmd(TokenType.PROGCMD, 0x08, _): // await
+				trace('await');
+			default:
+			}
+		}
 	}
 	function specialize() {
 		this.history = [];
