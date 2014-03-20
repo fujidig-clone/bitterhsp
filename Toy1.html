@@ -18,25 +18,52 @@ $(function() {
   loadBinary(name + ".ax").done(function(data) {
    var binary = [].map.call(new Uint8Array(data), function(x) { return String.fromCharCode(x) }).join("");
    var toy = new Toy1(binary);
-   var stat = toy.copy(binary);
-   var buf = "";
-   toy.procedures.forEach(function (p) {
-    var num = stat.get(p).num;
-    var procs = stat.get(p).procs.toArray();
-    if (num == 0) return;
-    buf += p.name + "(" + p.insn().fileName + ":" + p.insn().lineNumber + ") : ";
-    buf += procs.map(function(x){return x.name}).join(", ") + "との間に共有コードあり\n";
-   });
-   if (buf == "") buf = "なし";
+   var stat = toy.copy();
+   var specialized = toy.specialize();
+
    $("#result")
    .empty()
    .append($("<h2/>").text("結果"))
    .append($("<h3/>").text("手続き間の共有コード"))
-   .append($("<pre/>").text(buf))
+   .append(reportCopying(toy, stat))
+   .append($("<h3/>").text("手続きの呼び出し履歴ごとの特殊化"))
+   .append(reportSpecializing(toy, specialized))
    .show();
   });
  });
 });
+
+function reportCopying(toy, stat) {
+ var table = $("<table class=table style='width:auto'/>")
+ toy.procedures.forEach(function (p) {
+  var num = stat.get(p).num;
+  var procs = stat.get(p).procs.toArray();
+  if (num == 0) return;
+  $("<tr/>")
+   .append($("<td class=active/>").text(p.name + " (" + p.insn().fileName + ":" + p.insn().lineNumber + ")"))
+   .append($("<td/>").text(procs.map(function(x){return x.name}).join(", ") + "との間に共有コードあり"))
+   .appendTo(table);
+ });
+ if (table.children().size() == 0) {
+  return $("<p/>").text("なし");
+ }
+ return table;
+}
+
+function reportSpecializing(toy, specialized) {
+ var out = $("<div/>");
+ var n = toy.countInsns();
+ var nn = toy.countSpecializedInsns();
+ out.append($("<p/>").text((nn / n).toFixed(1)+"倍 ("+nn+" / "+n+")"));
+ var table = $("<table class=table style='width:auto'/>").appendTo(out);
+ toy.procedures.forEach(function (p) {
+  $("<tr/>")
+   .append($("<td class=active/>").text(p.name + " (" + p.insn().fileName + ":" + p.insn().lineNumber + ")"))
+   .append($("<td/>").text(specialized.get(p) + "個"))
+   .appendTo(table);
+ });
+ return out;
+}
 
 function loadBinary(url) {
 	var xhr = new XMLHttpRequest;

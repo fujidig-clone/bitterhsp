@@ -67,6 +67,22 @@ class Toy1 {
 			}
 		}
 	}
+	function countInsns() {
+		var num = 0;
+		for (p in this.procedures) {
+			if (this.specialized[p] >= 1) {
+				num += p.insns.length;
+			}
+		}
+		return num;
+	}
+	function countSpecializedInsns() {
+		var num = 0;
+		for (p in this.procedures) {
+			num += this.specialized[p] * p.insns.length;
+		}
+		return num;
+	}
 	function specialize() {
 		this.history = [];
 		this.specialized = new Map();
@@ -74,6 +90,7 @@ class Toy1 {
 			this.specialized[p] = 0;
 		}
 		this.specialize0(this.procedures[0]);
+		return this.specialized;
 	}
 	function specialize0(p:Procedure) {
 		this.specialized[p] += 1;
@@ -125,7 +142,6 @@ class Toy1 {
 			if (p == this.mainProcedure) {
 				labels.pushAll(this.listHandlerEntryPoints(JumpType.Goto));
 			}
-			trace('${p.name} ${labels}');
 			for (label in labels) {
 				// ラベルのinsnプロパティを書き換えることによって
 				// すべての呼び出し元の飛び先も変わる。ハッキーかも
