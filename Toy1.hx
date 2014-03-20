@@ -1,6 +1,7 @@
 import Compiler;
 import AXData;
 import Set;
+using Mixin;
 
 @:expose
 class Toy1 {
@@ -20,11 +21,12 @@ class Toy1 {
 	}
 
 	public function main_() {
-		var dup = copy();
+		var stat = copy();
 		for (p in this.procedures) {
-			trace('${p.name}: ${dup[p]}');
+			var names = [for (proc in stat[p].procs) proc.name].join(", ");
+			trace('${p.name}: ${stat[p].num} ${names}');
 		}
-		return;
+		trace("--------------------------------------------------");
 		this.specialize();
 		for (p in this.procedures) {
 			trace('${p.name}: ${this.specialized[p]}');
@@ -34,7 +36,10 @@ class Toy1 {
 	var sequence: Instruction;
 	var userDefFuncs: Array<UserDefFunc>;
 	public var procedures: Array<Procedure>;
+	var mainProcedure: Procedure;
 	var labelToProc = new Map<Label, Procedure>();
+	var handlerSubs: Array<Label>;
+	var thereAreCallsAtWaitCommand: Bool;
 
 	var specialized: Map<Procedure,Int>;
 	var history: Array<Procedure>;
@@ -43,7 +48,8 @@ class Toy1 {
 		var compiled = new Compiler(binary).compile();
 		this.sequence = compiled.sequence;
 		this.userDefFuncs = compiled.userDefFuncs.filter(function(x) return x != null);
-		this.procedures = listProcedures();
+		setupProcedures();
+		this.handlerSubs = listHandlerEntryPoints(JumpType.Gosub);
 		for (p in this.procedures) labelToProc[p.label] = p;
 	}
 	function collectHandlers() {
@@ -70,15 +76,12 @@ class Toy1 {
 		this.specialize0(this.procedures[0]);
 	}
 	function specialize0(p:Procedure) {
-		if (this.history.indexOf(p) >= 0) {
-			trace(p.name);
-			trace(p.insn().fileName);
-			throw new ThereIsRecursion();
-		}
 		this.specialized[p] += 1;
-		trace(p.name);
+		if (this.history.indexOf(p) >= 0) {
+			// 再帰呼び出し
+			return;
+		}
 		for (insn in p.insns) {
-			trace('${insn} ${getLabelsFromCallInsn(insn)}');
 			for (label in getLabelsFromCallInsn(insn)) {
 				var proc = this.labelToProc[label];
 				this.history.push(p);
@@ -98,31 +101,54 @@ class Toy1 {
 			return [label];
 		case Insn.On(labels,JumpType.Gosub):
 			return labels;
+		case Insn.Call_builtin_cmd(TokenType.PROGCMD, 0x11, _), // stop
+		     Insn.Call_builtin_cmd(TokenType.PROGCMD, 0x07, _), // wait
+		     Insn.Call_builtin_cmd(TokenType.PROGCMD, 0x08, _): // await
+			if (this.thereAreCallsAtWaitCommand) {
+				return this.handlerSubs;
+			} else {
+				return [];
+			}
 		default:
 			return [];
 		}
 	}
 
+
 	public function copy() {
-		var used = new Set(new Map());
-		var dup = new Map<Procedure,Int>();
+		var used = new Map<Instruction,Procedure>();
+		var stat = new Map<Procedure,CopyStat>();
 		for (p in this.procedures) {
 			var copied = new Map();
-			var newHead = copyProcedureBody(p.insn(), copied);
-			dup[p] = 0;
+			var labels = [p.label];
+			// button gotoなどの行き先はメイン手続きに含める
+			if (p == this.mainProcedure) {
+				labels.pushAll(this.listHandlerEntryPoints(JumpType.Goto));
+			}
+			trace('${p.name} ${labels}');
+			for (label in labels) {
+				// ラベルのinsnプロパティを書き換えることによって
+				// すべての呼び出し元の飛び先も変わる。ハッキーかも
+				var newInsn = copyProcedureBody(label.insn, copied);
+				label.insn = newInsn;
+			}
+
+			// 統計
+			var num = 0;
+			var procs = new Set(new Map());
 			p.insns = [];
 			for (i in copied.keys()) {
-				if (used.has(i)) {
-					dup[p] += 1;
+				if (used[i] != null) {
+					num += 1;
+					procs.add(used[i]);
+				} else {
+					used[i] = p;
 				}
-				used.add(i);
 				p.insns.push(copied[i]);
 			}
-			// ラベルのinsnプロパティを書き換えることによって
-			// すべての呼び出し元の飛び先も変わる。ハッキーかも
-			p.label.insn = newHead;
+			stat[p] = {num: num, procs: procs};
 		}
-		return dup;
+		return stat;
 	}
 	function copyProcedureBody(insn:Instruction, copied:Map<Instruction,Instruction>) {
 		// [XXX] 深さ優先探索だとスタックを食いつぶしてしまうかもしれないから
@@ -149,13 +175,25 @@ class Toy1 {
 		}
 		return newInsn;
 	}
-	function listProcedures() {
-		var main = new Procedure(null, new Label(this.sequence), "(main)");
+	function setupProcedures() {
+		this.mainProcedure = new Procedure(null, new Label(this.sequence), "(main)");
 		var subRoutines = [for (l in listSubroutines()) new Procedure(null, l, "*"+l.name)];
 		var funcs = [for (f in this.userDefFuncs) new Procedure(f, f.label, f.name)];
-		var procs = [main].concat(subRoutines).concat(funcs);
+		var procs = [this.mainProcedure].concat(subRoutines).concat(funcs);
 		procs.sort(function (a, b) return a.insn().origPos - b.insn().origPos);
-		return procs;
+		this.procedures = procs;
+	}
+	// buttonやoncmdなどの飛び先をリストする
+	function listHandlerEntryPoints(jumpType:JumpType): Array<Label> {
+		var labelsSet = new Set<Label>(new Map());
+		for (insn in eachInsn()) {
+			switch (insn.opts) {
+			case Insn.Call_builtin_handler_cmd(type,code,j,label,argc):
+				if (j == jumpType) labelsSet.add(label);
+			default:
+			}
+		}
+		return labelsSet.toArray();
 	}
 	function listSubroutines(): Array<Label> {
 		var labelsSet = new Set<Label>(new Map());
@@ -183,6 +221,11 @@ class Toy1 {
 			}
 		};
 	}
+}
+
+typedef CopyStat = {
+	var num: Int;
+	var procs: Set<Procedure>;
 }
 
 class ThereIsRecursion { public function new() {} }

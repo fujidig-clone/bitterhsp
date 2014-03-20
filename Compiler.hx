@@ -773,7 +773,11 @@ class Label {
 	}
 
 	public function toString() {
-		return "<Label>";
+		if (this.name != null) {
+			return '<Label:${this.name}>';
+		} else {
+			return "<Label>";
+		}
 	}
 }
 

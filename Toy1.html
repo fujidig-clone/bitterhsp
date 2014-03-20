@@ -9,6 +9,9 @@
 <script src="_Toy1.js"></script>
 <script>
 $(function() {
+ if(typeof ArrayBuffer=="undefined") {
+  $("h1").after($("<p/>").text("このブラウザには対応していません"));
+ }
  $("#sample form").submit(function(e) {
   e.preventDefault();
   var name = $("select", this).val();
@@ -18,8 +21,13 @@ $(function() {
    var stat = toy.copy(binary);
    var buf = "";
    toy.procedures.forEach(function (p) {
-    buf += p.name + ": " + stat.get(p) + "\n";
+    var num = stat.get(p).num;
+    var procs = stat.get(p).procs.toArray();
+    if (num == 0) return;
+    buf += p.name + "(" + p.insn().fileName + ":" + p.insn().lineNumber + ") : ";
+    buf += procs.map(function(x){return x.name}).join(", ") + "との間に共有コードあり\n";
    });
+   if (buf == "") buf = "なし";
    $("#result")
    .empty()
    .append($("<h2/>").text("結果"))
