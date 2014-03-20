@@ -9,18 +9,6 @@ class Toy1 {
 			main_nodejs();
 		}
         }
-	public static function run(binary: String) {
-		var compiler = new Compiler(binary);
-		return new Toy1(compiler.compile()).run_();
-	}
-	function run_() {
-		var dup = copy();
-		var buf = new StringBuf();
-		for (p in this.procedures) {
-			buf.add('${p.name}: ${dup[p]}\n');
-		}
-		return buf.toString();
-	}
 	public static function main_nodejs() {
 		var path, binary: String;
 		untyped {
@@ -28,8 +16,7 @@ class Toy1 {
 			if (path == null) path = "t.ax";
 			binary = require("fs").readFileSync(path).toString("binary");
 		}
-		var compiler = new Compiler(binary);
-		new Toy1(compiler.compile()).main_();
+		new Toy1(binary).main_();
 	}
 
 	public function main_() {
@@ -46,13 +33,14 @@ class Toy1 {
 
 	var sequence: Instruction;
 	var userDefFuncs: Array<UserDefFunc>;
-	var procedures: Array<Procedure>;
+	public var procedures: Array<Procedure>;
 	var labelToProc = new Map<Label, Procedure>();
 
 	var specialized: Map<Procedure,Int>;
 	var history: Array<Procedure>;
 
-	public function new(compiled:CompileResult) {
+	public function new(binary:String) {
+		var compiled = new Compiler(binary).compile();
 		this.sequence = compiled.sequence;
 		this.userDefFuncs = compiled.userDefFuncs.filter(function(x) return x != null);
 		this.procedures = listProcedures();
@@ -115,8 +103,7 @@ class Toy1 {
 		}
 	}
 
-
-	function copy() {
+	public function copy() {
 		var used = new Set(new Map());
 		var dup = new Map<Procedure,Int>();
 		for (p in this.procedures) {

@@ -14,12 +14,17 @@ $(function() {
   var name = $("select", this).val();
   loadBinary(name + ".ax").done(function(data) {
    var binary = [].map.call(new Uint8Array(data), function(x) { return String.fromCharCode(x) }).join("");
-   var result = Toy1.run(binary);
+   var toy = new Toy1(binary);
+   var stat = toy.copy(binary);
+   var buf = "";
+   toy.procedures.forEach(function (p) {
+    buf += p.name + ": " + stat.get(p) + "\n";
+   });
    $("#result")
    .empty()
    .append($("<h2/>").text("結果"))
-   .append($("<h3/>").text("サブルーチン間の共有コード"))
-   .append($("<pre/>").text(result))
+   .append($("<h3/>").text("手続き間の共有コード"))
+   .append($("<pre/>").text(buf))
    .show();
   });
  });
