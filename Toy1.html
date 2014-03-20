@@ -6,31 +6,42 @@
 <link rel="stylesheet" href="http://netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css">
 <script src="http://code.jquery.com/jquery-2.1.0.js"></script>
 <script src="http://netdna.bootstrapcdn.com/bootstrap/3.1.1/js/bootstrap.min.js"></script>
+<script>
+</script>
 </head>
 <body class="container">
 <h1 class="page-header">試作1</h1>
-<div class="panel panel-default">
-<div class="panel-heading">既存のスクリプトを読み込む</div>
-<div class="panel-body">
-<div class="form-group">
-<select size=3 class="form-control">
-<option>d3module techdemo
-<option>HDL
-<option>HSP3 demo
-</select>
+<div class="row">
+<div class="col-sm-3">
+ <ul class="nav nav-pills nav-stacked">
+ <li class="active"><a href="#sample" data-toggle="tab">サンプルスクリプトを読み込む</a></li>
+ <li><a href="#edit" data-toggle="tab">スクリプトを入力する</a></li>
+ </ul>
 </div>
-<input type="submit" value="読み込む" class="btn">
-</div></div>
-
-<div class="panel panel-default">
-<div class="panel-heading">スクリプトを入力する</div>
-<div class="panel-body">
-<div class="form-group">
-<textarea class="form-control">
-mes "hello"
-</textarea>
+<div class="col-sm-9">
+ <div class="tab-content">
+  <div class="tab-pane active" id="sample">
+   <form>
+   <div class="form-group">
+   <select size=3 class="form-control" name="script">
+   <option value="d3m_techdemo">d3module techdemo
+   <option value="hdl_browser">HDL
+   <option value="demo">HSP3 demo
+   </select>
+   </div>
+   <input type="submit" value="読み込む" class="btn">
+   </form>
+  </div>
+  <div class="tab-pane" id="edit">
+   <div class="form-group">
+   <textarea class="form-control">
+   mes "hello"
+   </textarea>
+   </div>
+   <input type="submit" value="入力" class="btn">
+  </div>
+ </div>
 </div>
-<input type="submit" value="読み込む" class="btn">
-</div></div>
+</div>
 </body>
 </html>
