@@ -15,9 +15,12 @@ $(function() {
  $("#sample form").submit(function(e) {
   e.preventDefault();
   var name = $("select", this).val();
-  loadBinary(name + ".ax").done(function(data) {
+  loadBinary(name + ".ax").fail(function() {
+   alert("loading error: "+this.status);
+  }).done(function(data) {
    var binary = [].map.call(new Uint8Array(data), function(x) { return String.fromCharCode(x) }).join("");
    var toy = new Toy1(binary);
+   toy.thereAreCallsAtWaitCommand = $("#checkbox-wait")[0].checked;
    var stat = toy.copy();
    var specialized = toy.specialize();
 
@@ -70,7 +73,8 @@ function loadBinary(url) {
 	var deferred = jQuery.Deferred();
 	xhr.open("GET", url);
 	xhr.responseType = "arraybuffer";
-	xhr.onload = function () {
+	xhr.onreadystatechange = function () {
+		if (this.readyState != 4) return;
 		if (this.status == 200) {
 			deferred.resolveWith(this, [this.response]);
 		} else {
@@ -115,6 +119,10 @@ mes "hello"</textarea>
   </div>
  </div>
 </div>
+
+<div class="checkbox small"><label><input type="checkbox" id="checkbox-wait">stop, wait, await命令でoncmdなどで指定されたサブルーチンの呼び出しがあるものとする <small>(HDLではとても時間がかかってしまいます)</small></label></div>
+
+
 <div id="result" style="display:none">
 </div>
 </body>

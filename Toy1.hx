@@ -27,10 +27,19 @@ class Toy1 {
 			trace('${p.name}: ${stat[p].num} ${names}');
 		}
 		trace("--------------------------------------------------");
+		var start = Date.now();
+		trace(start);
+		this.thereAreCallsAtWaitCommand = true;
 		this.specialize();
 		for (p in this.procedures) {
 			trace('${p.name}: ${this.specialized[p]}');
 		}
+		var n = this.countInsns();
+		var nn = this.countSpecializedInsns();
+		var end = Date.now();
+		trace('${nn / n} (${nn} / ${n})');
+		trace(end);
+		trace((end.getTime() - start.getTime()) / 1000);
 	}
 
 	var sequence: Instruction;
@@ -39,7 +48,7 @@ class Toy1 {
 	var mainProcedure: Procedure;
 	var labelToProc = new Map<Label, Procedure>();
 	var handlerSubs: Array<Label>;
-	var thereAreCallsAtWaitCommand: Bool;
+	public var thereAreCallsAtWaitCommand: Bool;
 
 	var specialized: Map<Procedure,Int>;
 	var history: Array<Procedure>;
