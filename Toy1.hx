@@ -2,8 +2,26 @@ import Compiler;
 import AXData;
 import Set;
 
+@:expose
 class Toy1 {
 	public static function main() {
+		if (untyped __js__("typeof process") != "undefined") {
+			main_nodejs();
+		}
+        }
+	public static function run(binary: String) {
+		var compiler = new Compiler(binary);
+		return new Toy1(compiler.compile()).run_();
+	}
+	function run_() {
+		var dup = copy();
+		var buf = new StringBuf();
+		for (p in this.procedures) {
+			buf.add('${p.name}: ${dup[p]}\n');
+		}
+		return buf.toString();
+	}
+	public static function main_nodejs() {
 		var path, binary: String;
 		untyped {
 			path = process.argv[2];
@@ -15,12 +33,11 @@ class Toy1 {
 	}
 
 	public function main_() {
-		collectHandlers();
-		return;
 		var dup = copy();
 		for (p in this.procedures) {
-			//trace('${p.name}: ${dup[p]}');
+			trace('${p.name}: ${dup[p]}');
 		}
+		return;
 		this.specialize();
 		for (p in this.procedures) {
 			trace('${p.name}: ${this.specialized[p]}');
@@ -161,6 +178,8 @@ class Toy1 {
 				labelsSet.add(label);
 			case Insn.On(labels,JumpType.Gosub):
 				for (label in labels) labelsSet.add(label);
+			case Insn.Call_builtin_handler_cmd(type,code,jumpType=JumpType.Gosub,label,argc):
+				labelsSet.add(label);
 			default:
 			}
 		}

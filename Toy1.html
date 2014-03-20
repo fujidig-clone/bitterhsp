@@ -6,42 +6,76 @@
 <link rel="stylesheet" href="http://netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css">
 <script src="http://code.jquery.com/jquery-2.1.0.js"></script>
 <script src="http://netdna.bootstrapcdn.com/bootstrap/3.1.1/js/bootstrap.min.js"></script>
+<script src="_Toy1.js"></script>
 <script>
+$(function() {
+ $("#sample form").submit(function(e) {
+  e.preventDefault();
+  var name = $("select", this).val();
+  loadBinary(name + ".ax").done(function(data) {
+   var binary = [].map.call(new Uint8Array(data), function(x) { return String.fromCharCode(x) }).join("");
+   var result = Toy1.run(binary);
+   $("#result")
+   .empty()
+   .append($("<h2/>").text("結果"))
+   .append($("<h3/>").text("サブルーチン間の共有コード"))
+   .append($("<pre/>").text(result))
+   .show();
+  });
+ });
+});
+
+function loadBinary(url) {
+	var xhr = new XMLHttpRequest;
+	var deferred = jQuery.Deferred();
+	xhr.open("GET", url);
+	xhr.responseType = "arraybuffer";
+	xhr.onload = function () {
+		if (this.status == 200) {
+			deferred.resolveWith(this, [this.response]);
+		} else {
+			deferred.rejectWith(this);
+		}
+	};
+	xhr.send(null);
+	return deferred.promise();
+}
 </script>
 </head>
 <body class="container">
 <h1 class="page-header">試作1</h1>
 <div class="row">
-<div class="col-sm-3">
- <ul class="nav nav-pills nav-stacked">
- <li class="active"><a href="#sample" data-toggle="tab">サンプルスクリプトを読み込む</a></li>
- <li><a href="#edit" data-toggle="tab">スクリプトを入力する</a></li>
- </ul>
-</div>
-<div class="col-sm-9">
- <div class="tab-content">
-  <div class="tab-pane active" id="sample">
-   <form>
-   <div class="form-group">
-   <select size=3 class="form-control" name="script">
-   <option value="d3m_techdemo">d3module techdemo
-   <option value="hdl_browser">HDL
-   <option value="demo">HSP3 demo
-   </select>
+ <div class="col-sm-3">
+  <ul class="nav nav-pills nav-stacked">
+  <li class="active"><a href="#sample" data-toggle="tab">サンプルスクリプトを読み込む</a></li>
+  <!--<li><a href="#edit" data-toggle="tab">スクリプトを入力する</a></li>-->
+  </ul>
+ </div>
+ <div class="col-sm-9">
+  <div class="tab-content">
+   <div class="tab-pane active" id="sample">
+    <form>
+    <div class="form-group">
+    <select size=3 class="form-control" name="script">
+    <option value="d3m_techdemo" selected>d3module techdemo
+    <option value="hdl_browser">HDL
+    <option value="demo">HSP3 demo
+    </select>
+    </div>
+    <input type="submit" value="読み込む" class="btn">
+    </form>
    </div>
-   <input type="submit" value="読み込む" class="btn">
-   </form>
-  </div>
-  <div class="tab-pane" id="edit">
-   <div class="form-group">
-   <textarea class="form-control">
-   mes "hello"
-   </textarea>
+   <div class="tab-pane" id="edit">
+    <div class="form-group">
+    <textarea class="form-control">
+mes "hello"</textarea>
+    </div>
+    <input type="submit" value="入力" class="btn">
    </div>
-   <input type="submit" value="入力" class="btn">
   </div>
  </div>
 </div>
+<div id="result" style="display:none">
 </div>
 </body>
 </html>
