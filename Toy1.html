@@ -15,26 +15,59 @@ $(function() {
  $("#sample form").submit(function(e) {
   e.preventDefault();
   var name = $("select", this).val();
-  loadBinary(name + ".ax").fail(function() {
+  loadBinary(name + ".ax").done(run).fail(function() {
    alert("loading error: "+this.status);
-  }).done(function(data) {
-   var binary = [].map.call(new Uint8Array(data), function(x) { return String.fromCharCode(x) }).join("");
-   var toy = new Toy1(binary);
-   toy.thereAreCallsAtWaitCommand = $("#checkbox-wait")[0].checked;
-   var stat = toy.copy();
-   var specialized = toy.specialize();
-
-   $("#result")
-   .empty()
-   .append($("<h2/>").text("結果"))
-   .append($("<h3/>").text("手続き間の共有コード"))
-   .append(reportCopying(toy, stat))
-   .append($("<h3/>").text("手続きの呼び出し履歴ごとの特殊化"))
-   .append(reportSpecializing(toy, specialized))
-   .show();
   });
  });
+ $("#local a").click(function(e) {
+  e.preventDefault();
+  $("#local input").click();
+ });
+ $("#local input").change(function(e) {
+  handleFiles(this.files);
+ });
+ $("#dragandrophandler")
+ .on('dragenter', function (e) {
+  console.log("enter");
+  e.stopPropagation();
+  e.preventDefault();
+  $(this).addClass("active");
+ }).on('dragover', function (e) {
+  e.stopPropagation();
+  e.preventDefault();
+ }).on('dragleave', function (e) {
+  if (e.target != e.relatedTarget && !$.contains(e.target, e.relatedTarget)) {
+   $(this).removeClass("active");
+  }
+ }).on('drop', function (e) {
+  e.stopPropagation();
+  e.preventDefault();
+  $(this).removeClass("active");
+  handleFiles(e.originalEvent.dataTransfer.files);
+ });
 });
+
+function handleFiles(files) {
+ var file = files[0];
+ alert(file.name);
+}
+
+function run(data) {
+ var binary = [].map.call(new Uint8Array(data), function(x) { return String.fromCharCode(x) }).join("");
+ var toy = new Toy1(binary);
+ toy.thereAreCallsAtWaitCommand = $("#checkbox-wait")[0].checked;
+ var stat = toy.copy();
+ var specialized = toy.specialize();
+
+ $("#result")
+ .empty()
+ .append($("<h2/>").text("結果"))
+ .append($("<h3/>").text("手続き間の共有コード"))
+ .append(reportCopying(toy, stat))
+ .append($("<h3/>").text("手続きの呼び出し履歴ごとの特殊化"))
+ .append(reportSpecializing(toy, specialized))
+ .show();
+}
 
 function reportCopying(toy, stat) {
  var table = $("<table class=table style='width:auto'/>")
@@ -85,19 +118,34 @@ function loadBinary(url) {
 	return deferred.promise();
 }
 </script>
+<style>
+#dragandrophandler {
+    border: 2px dotted #0B85A1;
+    width: 100%;
+    color: #92AAB0;
+    text-align: center;
+    font-size: 200%;
+    padding: 30px 0;
+}
+
+#dragandrophandler.active {
+    border: 2px solid #0B85A1;
+}
+</style>
 </head>
 <body class="container">
 <h1 class="page-header">試作1</h1>
 <div class="row">
  <div class="col-sm-3">
   <ul class="nav nav-pills nav-stacked">
-  <li class="active"><a href="#sample" data-toggle="tab">サンプルスクリプトを読み込む</a></li>
+  <li><a href="#sample" data-toggle="tab">サンプルスクリプトを読み込む</a></li>
   <!--<li><a href="#edit" data-toggle="tab">スクリプトを入力する</a></li>-->
+  <li class=active><a href="#local" data-toggle="tab">ローカルのファイルを読み込む</a></li>
   </ul>
  </div>
  <div class="col-sm-9">
   <div class="tab-content">
-   <div class="tab-pane active" id="sample">
+   <div class="tab-pane" id="sample">
     <form>
     <div class="form-group">
     <select size=3 class="form-control" name="script">
@@ -116,6 +164,11 @@ mes "hello"</textarea>
     </div>
     <input type="submit" value="入力" class="btn">
    </div>
+   <div class="tab-pane active" id="local">
+    <div id="dragandrophandler">ここにファイルをドラッグ＆ドロップ</div>
+    <input type="file" style="display:none">
+    <p>または<a href="#">ファイル選択ダイアログを開く</a></p>
+   </div>
   </div>
  </div>
 </div>
@@ -123,7 +176,7 @@ mes "hello"</textarea>
 <div class="checkbox small"><label><input type="checkbox" id="checkbox-wait">stop, wait, await命令でoncmdなどで指定されたサブルーチンの呼び出しがあるものとする <small>(HDLではとても時間がかかってしまいます)</small></label></div>
 
 
-<div id="result" style="display:none">
-</div>
+<div id="result"></div>
+<p class="small pull-right">ソースコード: <a href="https://github.com/fujidig/bitterhsp">https://github.com/fujidig/bitterhsp</a></p>
 </body>
 </html>
