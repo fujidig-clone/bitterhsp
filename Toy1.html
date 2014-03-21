@@ -142,14 +142,14 @@ function loadBinary(url) {
 <div class="row">
  <div class="col-sm-3">
   <ul class="nav nav-pills nav-stacked">
-  <li><a href="#sample" data-toggle="tab">サンプルスクリプトを読み込む</a></li>
+  <li class=active><a href="#sample" data-toggle="tab">サンプルスクリプトを読み込む</a></li>
   <!--<li><a href="#edit" data-toggle="tab">スクリプトを入力する</a></li>-->
-  <li class=active><a href="#local" data-toggle="tab">ローカルのファイルを読み込む</a></li>
+  <li><a href="#local" data-toggle="tab">ローカルのファイルを読み込む</a></li>
   </ul>
  </div>
  <div class="col-sm-9">
   <div class="tab-content">
-   <div class="tab-pane" id="sample">
+   <div class="tab-pane active" id="sample">
     <form>
     <div class="form-group">
     <select size=3 class="form-control" name="script">
@@ -168,7 +168,8 @@ mes "hello"</textarea>
     </div>
     <input type="submit" value="入力" class="btn">
    </div>
-   <div class="tab-pane active" id="local">
+   <div class="tab-pane" id="local">
+    <p>デバッグ情報のついたオブジェクトファイル (obj)を入力してください</p>
     <div id="dragandrophandler">ここにファイルをドラッグ＆ドロップ</div>
     <input type="file" style="display:none">
     <p>または<a href="#">ファイル選択ダイアログを開く</a></p>
