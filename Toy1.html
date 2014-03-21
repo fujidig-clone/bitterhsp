@@ -15,8 +15,10 @@ $(function() {
  $("#sample form").submit(function(e) {
   e.preventDefault();
   var name = $("select", this).val();
-  loadBinary(name + ".ax").done(run).fail(function() {
+  loadBinary(name + ".ax").fail(function() {
    alert("loading error: "+this.status);
+  }).done(function (data) {
+   run(name, data);
   });
  });
  $("#local a").click(function(e) {
@@ -51,12 +53,12 @@ function handleFiles(files) {
  var file = files[0];
  var reader = new FileReader();
  reader.onload = function(ev) {
-  run(reader.result);
+  run(file.name, reader.result);
  }
  reader.readAsArrayBuffer(file);
 }
 
-function run(data) {
+function run(name, data) {
  var binary = [].map.call(new Uint8Array(data), function(x) { return String.fromCharCode(x) }).join("");
  var toy = new Toy1(binary);
  toy.thereAreCallsAtWaitCommand = $("#checkbox-wait")[0].checked;
@@ -65,7 +67,7 @@ function run(data) {
 
  $("#result")
  .empty()
- .append($("<h2/>").text("結果"))
+ .append($("<h2/>").text("結果 ").append($("<small/>").text(name)))
  .append($("<h3/>").text("手続き間の共有コード"))
  .append(reportCopying(toy, stat))
  .append($("<h3/>").text("手続きの呼び出し履歴ごとの特殊化"))
