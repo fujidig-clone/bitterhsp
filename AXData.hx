@@ -85,6 +85,7 @@ class AXData {
 		var dinfo = new BinaryReader(this.dinfo);
 		var pos = 0;
 		var fileName = null, lineNo = 0, lineSize = 0;
+		var hasLineNumbersInfo = this.hasLineNumbersInfo();
 		while (!cs.isEOS()) {
 			var c = cs.readUint16();
 			var type = c & 0x0fff;
@@ -98,7 +99,7 @@ class AXData {
 			var size = Std.int(cs.cursor / 2) - pos;
 			var stringValue = (type == TokenType.STRING) ? this.getDSStr(code) : null;
 			var doubleValue = (type == TokenType.DNUM) ? this.getDSDouble(code) : null;
-			while (true) {
+			if (hasLineNumbersInfo) while (true) {
 				var dinfoPos = dinfo.cursor;
 				var ofs = dinfo.readUint8();
 				if (ofs == 255) {
@@ -134,6 +135,21 @@ class AXData {
 			pos += size;
 		}
 		return tokens;
+	}
+	function hasLineNumbersInfo() {
+		var dinfo = new BinaryReader(this.dinfo);
+		while (true) {
+			var ofs = dinfo.readUint8();
+			if (ofs == 255 || ofs == 253) {
+				return false;
+			}
+			if (ofs == 254) {
+				dinfo.readUint24();
+				dinfo.readUint16();
+				continue;
+			}
+			return true;
+		}
 	}
 
 	function createSymbolNames() {
