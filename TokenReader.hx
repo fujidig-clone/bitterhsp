@@ -31,10 +31,7 @@ class TokenReader {
 	}
 
 	public function peekToken(i = 0) {
-		if (i < this.lookahead.length) {
-			return this.lookahead[i];
-		}
-		while (!this.reader.isEOS() && i < this.lookahead.length) {
+		while (!this.reader.isEOS() && i >= this.lookahead.length) {
 			this.push();
 		}
 		return this.lookahead[i];
