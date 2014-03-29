@@ -9,7 +9,7 @@ typedef CompileResult = {
 
 class Compiler {
 	var ax: AXData;
-	var tokensPos = 0;
+    var reader: TokenReader;
 	var labels: Array<Label>;
 	var ifLabels: Map<Int, Array<Label>> = new Map();
 	var userDefFuncs: Array<UserDefFunc> = [];
@@ -33,7 +33,8 @@ class Compiler {
 	}
 
 	public function new(data: String) {
-		var ax = this.ax = new AXData(data);
+		this.ax = new AXData(data);
+        this.reader = new TokenReader(this.ax);
 	}
 
 	public function compile(): CompileResult {
@@ -43,7 +44,7 @@ class Compiler {
 		}
 		for (i in 0...this.ax.funcsInfo.length) this.buildUserDefFunc(i);
 		for (i in 0...this.ax.funcsInfo.length) this.buildModule(i);
-		while (this.tokensPos < this.ax.tokens.length) {
+        while (!this.reader.isEOS()) {
 			this.compileStatement();
 		}
 		for (i in 0...sequence.length) {
@@ -66,9 +67,15 @@ class Compiler {
 		return ret.concat(this.labels);
 	}
 	function pushNewInsn(opts: Insn, ?token: Token) {
-		if (token == null) token = this.ax.tokens[this.tokensPos];
-		this.sequence.push(new Instruction(opts, token.fileName, token.lineNumber, null, this.tokensPos));
+		if (token == null) token = this.reader.last;
+		this.sequence.push(new Instruction(opts, token.fileName, token.lineNumber, null, this.reader.origPos));
 	}
+    function getToken() {
+        return this.reader.getToken();
+    }
+    function peekToken(i = 0) {
+        return this.reader.peekToken(i);
+    }
 	function getFinfoIdByMinfoId(minfoId: Int): Int {
 		var funcsInfo = this.ax.funcsInfo;
 		for (i in 0...funcsInfo.length) {
@@ -80,14 +87,14 @@ class Compiler {
 		return null;
 	}
 	function error(message = "", ?token: Token): CompileError {
-		if (token == null) token = this.ax.tokens[this.tokensPos];
-		return new CompileError(message, token.fileName, token.lineNumber);
+		if (token == null) token = this.reader.last;
+        return new CompileError(message, token.fileName, token.lineNumber);
 	}
 	function compileStatement() {
-		var token = this.ax.tokens[this.tokensPos];
-		if (!token.ex1) {
+        if (!isStmtHead(getToken()) {
 			throw this.error();
 		}
+        var token = peekToken();
 		var labelIDs = this.ax.labelsMap[token.pos];
 		if (labelIDs != null) {
 			for (i in 0...labelIDs.length) {
@@ -121,11 +128,11 @@ class Compiler {
 	function compileAssignment() {
 		this.compileVariable();
 
-		var token = this.ax.tokens[this.tokensPos++];
-		if (!(token != null && token.type == TokenType.MARK)) {
+        var token = getToken();
+		if (token.type != TokenType.MARK) {
 			throw this.error();
 		}
-		if (this.ax.tokens[this.tokensPos].ex1) {
+        if (isStmtHead(peekToken()) {
 			if (token.val == 0) { // インクリメント
 				this.pushNewInsn(Insn.Inc, token);
 				return;
@@ -151,39 +158,33 @@ class Compiler {
 		this.pushNewInsn(Insn.Assign(argc), token);
 	}
 	function compileProgramCommand() {
-		var token = this.ax.tokens[this.tokensPos];
+        var saved = this.reader.save();
+		var token = getToken();
 		switch(token.code) {
 		case 0x00: // goto
-			var labelToken = this.ax.tokens[this.tokensPos + 1];
-			if (labelToken != null && labelToken.type == TokenType.LABEL && !labelToken.ex2 && (this.ax.tokens[this.tokensPos + 2] == null || this.ax.tokens[this.tokensPos + 2].ex1)) {
+            if (peekToken().type == TokenType.LABEL && isStmtHead(peekToken(1))) {
+                getToken();
 				this.pushNewInsn(Insn.Goto(this.labels[labelToken.code]));
-				this.tokensPos += 2;
 			} else {
-				this.tokensPos ++;
 				var argc = this.compileParameters();
 				if (argc != 1) throw this.error('goto の引数の数が違います', token);
 				this.pushNewInsn(Insn.Goto_expr, token);
 			}
 		case 0x01: // gosub
-			var labelToken = this.ax.tokens[this.tokensPos + 1];
-			if (labelToken != null && labelToken.type == TokenType.LABEL && !labelToken.ex2 && (this.ax.tokens[this.tokensPos + 2] == null || this.ax.tokens[this.tokensPos + 2].ex1)) {
+            if (peekToken().type == TokenType.LABEL && isStmtHead(peekToken(1))) {
+                getToken();
 				this.pushNewInsn(Insn.Gosub(this.labels[labelToken.code]));
-				this.tokensPos += 2;
 			} else {
-				this.tokensPos ++;
 				var argc = this.compileParameters();
 				if (argc != 1) throw this.error('gosub の引数の数が違います', token);
 				this.pushNewInsn(Insn.Gosub_expr, token);
 			}
 		case 0x02: // return
-			this.tokensPos ++;
-			if (this.ax.tokens[this.tokensPos].ex2) throw this.error('パラメータは省略できません', token);
-			var argc = this.compileParameters();
+			var argc = this.compileParameters(true);
 			if (argc > 1) throw this.error('return の引数が多すぎます', token);
 			this.pushNewInsn(Insn.Return(argc == 1), token);
 		case 0x03: // break
-			this.tokensPos ++;
-			var labelToken = this.ax.tokens[this.tokensPos++];
+			var labelToken = getToken();
 			if (labelToken.type != TokenType.LABEL) {
 				throw this.error();
 			}
@@ -191,28 +192,19 @@ class Compiler {
 			if (argc > 0) throw this.error('break の引数が多すぎます', token);
 			this.pushNewInsn(Insn.Break(this.labels[labelToken.code]), token);
 		case 0x04: // repeat
-			this.tokensPos ++;
-			var labelToken = this.ax.tokens[this.tokensPos++];
+			var labelToken = getToken();
 			if (labelToken.type != TokenType.LABEL) {
 				throw this.error();
 			}
-			var argc;
-			if (this.ax.tokens[this.tokensPos].ex2) {
-				this.pushNewInsn(Insn.Push_int(-1), token);
-				argc = 1 + this.compileParametersSub();
-			} else {
-				argc = this.compileParameters();
-			}
+            argc = this.compileParameters();
 			if (argc > 2) throw this.error('repeat の引数が多すぎます', token);
 			this.pushNewInsn(Insn.Repeat(this.labels[labelToken.code], argc), token);
 		case 0x05: // loop
-			this.tokensPos ++;
 			var argc = this.compileParameters();
 			if (argc > 0) throw this.error('loop の引数が多すぎます', token);
 			this.pushNewInsn(Insn.Loop, token);
 		case 0x06: // continue
-			this.tokensPos ++;
-			var labelToken = this.ax.tokens[this.tokensPos++];
+			var labelToken = getToken();
 			if (labelToken.type != TokenType.LABEL) {
 				throw this.error();
 			}
@@ -220,8 +212,7 @@ class Compiler {
 			if (argc > 1) throw this.error('continue の引数が多すぎます', token);
 			this.pushNewInsn(Insn.Continue(this.labels[labelToken.code], argc), token);
 		case 0x0b: // foreach
-			this.tokensPos ++;
-			var labelToken = this.ax.tokens[this.tokensPos++];
+			var labelToken = getToken();
 			if (labelToken.type != TokenType.LABEL) {
 				throw this.error();
 			}
@@ -229,8 +220,7 @@ class Compiler {
 			if (argc > 0) throw this.error();
 			this.pushNewInsn(Insn.Foreach(this.labels[labelToken.code]), token);
 		case 0x0c: // eachchk
-			this.tokensPos ++;
-			var labelToken = this.ax.tokens[this.tokensPos++];
+			var labelToken = getToken();
 			if (labelToken.type != TokenType.LABEL) {
 				throw this.error();
 			}
@@ -238,12 +228,8 @@ class Compiler {
 			if (argc != 1) throw this.error('foreach の引数の数が違います', token);
 			this.pushNewInsn(Insn.Eachchk(this.labels[labelToken.code]), token);
 		case 0x12: // newmod
-			this.tokensPos ++;
-			if (this.ax.tokens[this.tokensPos].ex2) {
-				throw this.error('パラメータは省略できません');
-			}
 			this.compileVariable(); 
-			var structToken = this.ax.tokens[this.tokensPos++];
+			var structToken = getToken();
 			var prmInfo = this.ax.prmsInfo[structToken.code];
 			if (structToken.type != TokenType.STRUCT || prmInfo.mptype != MPType.STRUCTTAG) {
 				throw this.error('モジュールが指定されていません', structToken);
@@ -252,22 +238,15 @@ class Compiler {
 			var argc = this.compileParametersSub();
 			this.pushNewInsn(Insn.Newmod(module, argc), token);
 		case 0x14: // delmod
-			this.tokensPos ++;
 			var argc = this.compileParameters();
 			if (argc != 1) throw this.error('delmod の引数の数が違います', token);
 			this.pushNewInsn(Insn.Delmod, token);
 		case 0x18: // exgoto
-			this.tokensPos ++;
 			var argc = this.compileParameters();
 			if (argc != 4) throw this.error('exgoto の引数の数が違います', token);
 			var label = this.popLabelInsn();
 			this.pushNewInsn(Insn.Exgoto(label), token);
 		case 0x19: // on
-			this.tokensPos ++;
-			var paramToken = this.ax.tokens[this.tokensPos];
-			if (paramToken.ex1 || paramToken.ex2) {
-				throw this.error('パラメータは省略できません', token);
-			}
 			this.compileParameter();
 			var jumpType = this.readJumpType();
 			if (jumpType == null) {
@@ -280,26 +259,26 @@ class Compiler {
 			}
 			this.pushNewInsn(Insn.On(labels, jumpType), token);
 		default:
+            this.reader.rewind(saved);
 			this.compileCommand();
 		}
 	}
 	function compileBasicCommand() {
-		var token = this.ax.tokens[this.tokensPos];
-		var posBak = this.tokensPos;
+        var saved = this.reader.save();
+		var token = getToken();
 		switch(token.code) {
 		case 0x00, // onexit
 		     0x01, // onerror
 		     0x02, // onkey
 		     0x03, // onclick
 		     0x04: // oncmd
-			this.tokensPos ++;
 			var jumpType = this.readJumpType();
 			var label = this.readLabelLiteral();
 			if (jumpType != null && label == null) {
 				throw this.error("ラベル名が指定されていません");
 			}
 			if (label == null) {
-				this.tokensPos = posBak;
+                this.reader.rewind(saved);
 				this.compileCommand();
 				return;
 			}
@@ -307,30 +286,32 @@ class Compiler {
 			var argc = this.compileParametersSub();
 			this.pushNewInsn(Insn.Call_builtin_handler_cmd(token.type, token.code, jumpType, label, argc), token);
 		default:
+            this.reader.rewind(saved);
 			this.compileCommand();
 		}
 	}
 	function compileGuiCommand() {
-		var token = this.ax.tokens[this.tokensPos];
+        var saved = this.reader.save();
+		var token = getToken();
 		switch(token.code) {
 		case 0x00: // button
-			this.tokensPos ++;
 			var jumpType = this.readJumpType();
 			if (jumpType == null) jumpType = JumpType.Goto;
 			var argc = this.compileParameters();
 			var label = this.popLabelInsn();
 			this.pushNewInsn(Insn.Call_builtin_handler_cmd(token.type, token.code, jumpType, label, argc - 1), token);
 		default:
+            this.reader.rewind(saved);
 			this.compileCommand();
 		}
 	}
 	function compileCommand() {
-		var token = this.ax.tokens[this.tokensPos++];
+		var token = getToken();
 		var argc = this.compileParameters();
 		this.pushNewInsn(Insn.Call_builtin_cmd(token.type, token.code, argc), token);
 	}
 	function compileBranchCommand() {
-		var token = this.ax.tokens[this.tokensPos++];
+		var token = getToken();
 		var skipTo = token.pos + token.size + token.skipOffset;
 		var label = new Label();
 		this.ifLabels.pushAt(skipTo, label);
@@ -353,9 +334,8 @@ class Compiler {
 			}
 	}
 	function readLabelLiteral(): Label {
-		var token = this.ax.tokens[this.tokensPos++];
-		var nextToken = this.ax.tokens[this.tokensPos];
-		if (token.type == TokenType.LABEL && (nextToken == null || nextToken.ex1 || nextToken.ex2)) {
+		var token = getToken();
+		if (token.type == TokenType.LABEL && isStmtHead(peekToken())) {
 			return this.labels[token.code];
 		} else {
 			return null;
@@ -585,7 +565,7 @@ class Compiler {
 		}
 	}
 	function compileVariable() {
-		switch(this.ax.tokens[this.tokensPos].type) {
+        switch (peekToken().type) {
 		case TokenType.VAR:
 			this.compileStaticVariable();
 			return;
@@ -599,13 +579,13 @@ class Compiler {
 		throw this.error('変数が指定されていません');
 	}
 	function compileStaticVariable() {
-		var token = this.ax.tokens[this.tokensPos++];
+		var token = getToken();
 		var argc = this.compileVariableSubscript();
 		this.pushNewInsn(Insn.Push_var(token.code, argc), token);
 	}
 	function compileProxyVariable() {
 		var proxyVarType = this.getProxyVarType();
-		var token = this.ax.tokens[this.tokensPos++];
+		var token = getToken();
 		var prmInfo = this.ax.prmsInfo[token.code];
 		var funcInfo = this.ax.funcsInfo[this.getFinfoIdByMinfoId(token.code)];
 		switch(proxyVarType) {

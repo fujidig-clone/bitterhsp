@@ -17,17 +17,20 @@ class TokenReader {
 
 	var reader: TokenReaderWithoutLookingAhead;
 	var lookahead: Array<Token> = [];
+	public var last(default,null): Token;
 
 	public function new(cs: Array<Token>) {
 		this.reader = new TokenReaderWithoutLookingAhead(cs);
 	}
 
 	public function getToken() {
-		if (this.lookahead.length > 0) {
-			return this.lookahead.shift();
+		var token = if (this.lookahead.length > 0) {
+			this.lookahead.shift();
 		} else {
-			return this.reader.getToken();
+			this.reader.getToken();
 		}
+		this.last = token;
+		return token;
 	}
 
 	public function peekToken(i = 0) {
@@ -47,7 +50,20 @@ class TokenReader {
 		}
 	}
 
+	function save() { return copy(); }
+	function rewind(saved) { replace(saved); }
 
+	function copy() {
+		var clone = new TokenReader(this.cs);
+		clone.replace(this);
+		return clone;
+	}
+
+	function replace(from) {
+		this.reader = from.reader.copy();
+		this.lookahead = from.lookahead.copy();
+		this.last = from.last;
+	}
 }
 
 class TokenReaderWithoutLookingAhead {
@@ -79,6 +95,19 @@ class TokenReaderWithoutLookingAhead {
 		this.feededComma = false;
 		this.csOffset += 1;
 		return token;
+	}
+
+	public function copy() {
+		var clone = new TokenReaderWithoutLookingAhead(this.cs);
+		clone.replace(this);
+		return clone;
+	}
+
+	public function replace(from) {
+		this.cs = from.cs;
+		this.csOffset = from.csOffset;
+		this.feededStmtHead = from.feededStmtHead;
+		this.feededComma = from.feededComma;
 	}
 }
 
