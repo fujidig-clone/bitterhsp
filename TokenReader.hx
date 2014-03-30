@@ -99,7 +99,7 @@ class TokenReaderWithoutLookingAhead {
 		if (token.ex1 && !this.feededStmtHead) {
 			this.feededStmtHead = true;
 			return TokenReaderUtils.makeStmtHead(token);
-			}
+		}
 		if (token.ex2 && !this.feededComma) {
 			this.feededComma = true;
 			return TokenReaderUtils.makeComma(token);
