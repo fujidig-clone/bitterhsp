@@ -1,4 +1,6 @@
 import AXData;
+import TokenReader;
+import TokenReader.TokenReaderUtils.*;
 using Mixin;
 
 typedef CompileResult = {
@@ -9,7 +11,7 @@ typedef CompileResult = {
 
 class Compiler {
 	var ax: AXData;
-    var reader: TokenReader;
+	var reader: TokenReader;
 	var labels: Array<Label>;
 	var ifLabels: Map<Int, Array<Label>> = new Map();
 	var userDefFuncs: Array<UserDefFunc> = [];
@@ -34,7 +36,7 @@ class Compiler {
 
 	public function new(data: String) {
 		this.ax = new AXData(data);
-        this.reader = new TokenReader(this.ax);
+		this.reader = new TokenReader(this.ax.tokens);
 	}
 
 	public function compile(): CompileResult {
@@ -44,7 +46,7 @@ class Compiler {
 		}
 		for (i in 0...this.ax.funcsInfo.length) this.buildUserDefFunc(i);
 		for (i in 0...this.ax.funcsInfo.length) this.buildModule(i);
-        while (!this.reader.isEOS()) {
+		while (!this.reader.isEOS()) {
 			this.compileStatement();
 		}
 		for (i in 0...sequence.length) {
@@ -68,14 +70,14 @@ class Compiler {
 	}
 	function pushNewInsn(opts: Insn, ?token: Token) {
 		if (token == null) token = this.reader.last;
-		this.sequence.push(new Instruction(opts, token.fileName, token.lineNumber, null, this.reader.origPos));
+		this.sequence.push(new Instruction(opts, token.fileName, token.lineNumber, null, this.reader.origPos()));
 	}
-    function getToken() {
-        return this.reader.getToken();
-    }
-    function peekToken(i = 0) {
-        return this.reader.peekToken(i);
-    }
+	function getToken() {
+		return this.reader.getToken();
+	}
+	function peekToken(i = 0) {
+		return this.reader.peekToken(i);
+	}
 	function getFinfoIdByMinfoId(minfoId: Int): Int {
 		var funcsInfo = this.ax.funcsInfo;
 		for (i in 0...funcsInfo.length) {
@@ -88,13 +90,13 @@ class Compiler {
 	}
 	function error(message = "", ?token: Token): CompileError {
 		if (token == null) token = this.reader.last;
-        return new CompileError(message, token.fileName, token.lineNumber);
+		return new CompileError(message, token.fileName, token.lineNumber);
 	}
 	function compileStatement() {
-        if (!isStmtHead(getToken()) {
+		if (!isStmtHead(getToken())) {
 			throw this.error();
 		}
-        var token = peekToken();
+		var token = peekToken();
 		var labelIDs = this.ax.labelsMap[token.pos];
 		if (labelIDs != null) {
 			for (i in 0...labelIDs.length) {
@@ -128,11 +130,11 @@ class Compiler {
 	function compileAssignment() {
 		this.compileVariable();
 
-        var token = getToken();
+		var token = getToken();
 		if (token.type != TokenType.MARK) {
 			throw this.error();
 		}
-        if (isStmtHead(peekToken()) {
+		if (isStmtHead(peekToken())) {
 			if (token.val == 0) { // インクリメント
 				this.pushNewInsn(Insn.Inc, token);
 				return;
@@ -158,22 +160,20 @@ class Compiler {
 		this.pushNewInsn(Insn.Assign(argc), token);
 	}
 	function compileProgramCommand() {
-        var saved = this.reader.save();
+		var saved = this.reader.save();
 		var token = getToken();
 		switch(token.code) {
 		case 0x00: // goto
-            if (peekToken().type == TokenType.LABEL && isStmtHead(peekToken(1))) {
-                getToken();
-				this.pushNewInsn(Insn.Goto(this.labels[labelToken.code]));
+			if (peekToken().type == TokenType.LABEL && isStmtHead(peekToken(1))) {
+				this.pushNewInsn(Insn.Goto(this.labels[getToken().code]));
 			} else {
 				var argc = this.compileParameters();
 				if (argc != 1) throw this.error('goto の引数の数が違います', token);
 				this.pushNewInsn(Insn.Goto_expr, token);
 			}
 		case 0x01: // gosub
-            if (peekToken().type == TokenType.LABEL && isStmtHead(peekToken(1))) {
-                getToken();
-				this.pushNewInsn(Insn.Gosub(this.labels[labelToken.code]));
+			if (peekToken().type == TokenType.LABEL && isStmtHead(peekToken(1))) {
+				this.pushNewInsn(Insn.Gosub(this.labels[getToken().code]));
 			} else {
 				var argc = this.compileParameters();
 				if (argc != 1) throw this.error('gosub の引数の数が違います', token);
@@ -196,7 +196,7 @@ class Compiler {
 			if (labelToken.type != TokenType.LABEL) {
 				throw this.error();
 			}
-            argc = this.compileParameters();
+			var argc = this.compileParameters();
 			if (argc > 2) throw this.error('repeat の引数が多すぎます', token);
 			this.pushNewInsn(Insn.Repeat(this.labels[labelToken.code], argc), token);
 		case 0x05: // loop
@@ -247,7 +247,7 @@ class Compiler {
 			var label = this.popLabelInsn();
 			this.pushNewInsn(Insn.Exgoto(label), token);
 		case 0x19: // on
-			this.compileParameter();
+			this.compileParameter(true);
 			var jumpType = this.readJumpType();
 			if (jumpType == null) {
 				throw this.error('goto / gosubが指定されていません');
@@ -259,26 +259,26 @@ class Compiler {
 			}
 			this.pushNewInsn(Insn.On(labels, jumpType), token);
 		default:
-            this.reader.rewind(saved);
+			this.reader.rewind(saved);
 			this.compileCommand();
 		}
 	}
 	function compileBasicCommand() {
-        var saved = this.reader.save();
+		var saved = this.reader.save();
 		var token = getToken();
 		switch(token.code) {
 		case 0x00, // onexit
-		     0x01, // onerror
-		     0x02, // onkey
-		     0x03, // onclick
-		     0x04: // oncmd
+			 0x01, // onerror
+			 0x02, // onkey
+			 0x03, // onclick
+			 0x04: // oncmd
 			var jumpType = this.readJumpType();
 			var label = this.readLabelLiteral();
 			if (jumpType != null && label == null) {
 				throw this.error("ラベル名が指定されていません");
 			}
 			if (label == null) {
-                this.reader.rewind(saved);
+				this.reader.rewind(saved);
 				this.compileCommand();
 				return;
 			}
@@ -286,12 +286,12 @@ class Compiler {
 			var argc = this.compileParametersSub();
 			this.pushNewInsn(Insn.Call_builtin_handler_cmd(token.type, token.code, jumpType, label, argc), token);
 		default:
-            this.reader.rewind(saved);
+			this.reader.rewind(saved);
 			this.compileCommand();
 		}
 	}
 	function compileGuiCommand() {
-        var saved = this.reader.save();
+		var saved = this.reader.save();
 		var token = getToken();
 		switch(token.code) {
 		case 0x00: // button
@@ -301,7 +301,7 @@ class Compiler {
 			var label = this.popLabelInsn();
 			this.pushNewInsn(Insn.Call_builtin_handler_cmd(token.type, token.code, jumpType, label, argc - 1), token);
 		default:
-            this.reader.rewind(saved);
+			this.reader.rewind(saved);
 			this.compileCommand();
 		}
 	}
@@ -335,74 +335,66 @@ class Compiler {
 	}
 	function readLabelLiteral(): Label {
 		var token = getToken();
-		if (token.type == TokenType.LABEL && isStmtHead(peekToken())) {
+		if (token.type == TokenType.LABEL && (isStmtHead(peekToken()) || isComma(peekToken()))) {
 			return this.labels[token.code];
 		} else {
 			return null;
 		}
 	}
 	function compileParameters(cannotBeOmitted = false): Int {
-		var argc = 0;
-		if (this.ax.tokens[this.tokensPos].ex2) {
-			if (cannotBeOmitted) {
-				throw this.error('パラメータの省略はできません');
-			}
-			this.pushNewInsn(Insn.Push_default);
-			argc ++;
+		var token = peekToken();
+		if (isStmtHead(token) || isRightParenToken(token)) {
+			return 0;
 		}
+		var argc = 1;
+		this.compileParameter(cannotBeOmitted);
 		argc += this.compileParametersSub(cannotBeOmitted);
 		return argc;
 	}
 	function compileParametersSub(cannotBeOmitted = false): Int {
 		var argc = 0;
 		while (true) {
-			var token = this.ax.tokens[this.tokensPos];
-			if (token == null || token.ex1) return argc;
-			if (token.type == TokenType.MARK) {
-				if (token.code == 63) { // '?'
-					if (cannotBeOmitted) {
-						throw this.error('パラメータの省略はできません');
-					}
-					this.pushNewInsn(Insn.Push_default);
-					this.tokensPos ++;
-					argc ++;
-					continue;
-				}
-				if (token.code == 41) { // ')'
-					return argc;
-				}
+			var token = peekToken();
+			if (isStmtHead(token) || isRightParenToken(token)) {
+				return argc;
 			}
+			if (!isComma(getToken())) {
+				throw this.error("カンマがありません");
+			}
+			this.compileParameter(cannotBeOmitted);
 			argc ++;
-			this.compileParameter();
 		}
 	}
-	function compileParameter() {
-		var headPos = this.tokensPos;
+	function compileParameter(cannotBeOmitted) {
+		if (isComma(peekToken())) {
+				if (cannotBeOmitted) {
+					throw this.error('パラメータの省略はできません');
+				}
+				this.pushNewInsn(Insn.Push_default);
+				return;
+		}
 		while (true) {
-			var token = this.ax.tokens[this.tokensPos];
-			if (token == null || token.ex1) return;
+			var token = peekToken();
+			if (isStmtHead(token) || isComma(token) || isRightParenToken(token)) return;
 			switch(token.type) {
 			case TokenType.MARK:
-				if (token.code == 41) { // ')'
-					return;
-				}
 				this.compileOperator();
 			case TokenType.VAR:
 				this.compileStaticVariable();
 			case TokenType.STRING:
 				this.pushNewInsn(Insn.Push_string(token.stringValue));
-				this.tokensPos ++;
+				getToken();
 			case TokenType.DNUM:
 				this.pushNewInsn(Insn.Push_double(token.doubleValue));
-				this.tokensPos ++;
+				getToken();
 			case TokenType.INUM:
 				this.pushNewInsn(Insn.Push_int(token.val));
-				this.tokensPos ++;
+				getToken();
 			case TokenType.STRUCT:
 				this.compileStruct();
 			case TokenType.LABEL:
 				this.pushNewInsn(Insn.Push_label(this.labels[token.code]));
-				this.tokensPos ++;
+				getToken();
 			case TokenType.EXTSYSVAR:
 				this.compileExtSysvar();
 			case TokenType.SYSVAR:
@@ -416,15 +408,13 @@ class Compiler {
 			default:
 				this.compileFuncall();
 			}
-			token = this.ax.tokens[this.tokensPos];
-			if (token != null && token.ex2) return;
 		}
 	}
 	function compileOperator() {
 		var OP_INSN = [Insn.Add, Insn.Sub, Insn.Mul, Insn.Div, Insn.Mod,
-		               Insn.And, Insn.Or, Insn.Xor, Insn.Eq, Insn.Ne,
+					   Insn.And, Insn.Or, Insn.Xor, Insn.Eq, Insn.Ne,
 					   Insn.Gt, Insn.Lt, Insn.Gteq, Insn.Lteq, Insn.Rsh, Insn.Lsh];
-		var token = this.ax.tokens[this.tokensPos++];
+		var token = getToken();
 		if (!(0 <= token.code && token.code < 16)) {
 			throw this.error("演算子コード " + token.code + " は解釈できません。", token);
 		}
@@ -432,29 +422,28 @@ class Compiler {
 		this.pushNewInsn(OP_INSN[token.code], token);
 	}
 	function compileExtSysvar() {
-		var token = this.ax.tokens[this.tokensPos];
-		if (token.code >= 0x100) {
+		if (peekToken().code >= 0x100) {
 			this.compileFuncall();
 		} else {
 			this.compileSysvar();
 		}
 	}
 	function compileStruct() {
-		var token = this.ax.tokens[this.tokensPos];
+		var token = peekToken();
 		var prmInfo = this.ax.prmsInfo[token.code];
 		if (this.getProxyVarType() != null) {
 			this.compileProxyVariable();
 		} else if (token.type == -1) {
-			this.tokensPos ++;
+			this.getToken();
 			this.pushNewInsn(Insn.Thismod, token);
 		} else {
-			this.tokensPos ++;
+			this.getToken();
 			var funcInfo = this.ax.funcsInfo[this.getFinfoIdByMinfoId(token.code)];
 			this.pushNewInsn(Insn.Getarg(token.code - funcInfo.prmindex), token);
 		}
 	}
 	function compileSysvar() {
-		var token = this.ax.tokens[this.tokensPos++];
+		var token = peekToken();
 		if (token.type == TokenType.SYSVAR && token.code == 0x04) {
 			this.pushNewInsn(Insn.Cnt, token);
 			return;
@@ -462,21 +451,21 @@ class Compiler {
 		this.pushNewInsn(Insn.Call_builtin_func(token.type, token.code, 0), token);
 	}
 	function readJumpType(): JumpType {
-		var token = this.ax.tokens[this.tokensPos];
-		if (!token.ex1 && token.type == TokenType.PROGCMD && token.val <= 1) {
-			this.tokensPos ++;
+		var token = peekToken();
+		if (token.type == TokenType.PROGCMD && token.val <= 1) {
+			getToken();
 			return token.val == 1 ? JumpType.Gosub : JumpType.Goto;
 		}
 		return null;
 	}
 	function compileUserDefFuncall() {
-		var token = this.ax.tokens[this.tokensPos++];
+		var token = getToken();
 		var userDefFunc = this.getUserDefFunc(token.code);
 		var argc = this.compileParenAndParameters();
 		this.pushNewInsn(Insn.Call_userdef_func(userDefFunc, argc), token);
 	}
 	function compileUserDefCommand() {
-		var token = this.ax.tokens[this.tokensPos++];
+		var token = getToken();
 		var userDefFunc = this.getUserDefFunc(token.code);
 		var argc = this.compileParameters();
 		this.pushNewInsn(Insn.Call_userdef_cmd(userDefFunc, argc), token);
@@ -518,31 +507,29 @@ class Compiler {
 		this.modules[finfoId] = new Module(funcInfo.name, constructor, destructor, funcInfo.prmmax - 1, finfoId);
 	}
 	function compileIntFuncall() {
-		var token = this.ax.tokens[this.tokensPos];
+		var token = peekToken();
 		if (token.code == 0x0c) { // varptr
-			var token_1 = this.ax.tokens[this.tokensPos+1];
-			var token_2 = this.ax.tokens[this.tokensPos+2];
-			var token_3 = this.ax.tokens[this.tokensPos+3];
+			var token_1 = peekToken(1);
+			var token_2 = peekToken(2);
+			var token_3 = peekToken(3);
 			if (this.isLeftParenToken(token_1) && token_2.type == TokenType.DLLFUNC && this.isRightParenToken(token_3)) {
 				this.pushNewInsn(Insn.Push_int(token_2.val));
 				this.pushNewInsn(Insn.Call_builtin_func(token.type, token.code, 1), token);
-				this.tokensPos += 4;
+				for (i in 0...4) getToken(); 
 				return;
-
 			}
 		}
 		this.compileFuncall();
 	}
 	function compileDllctrlCall() {
-		var token = this.ax.tokens[this.tokensPos];
-		if (token.code >= 0x1000) {
+		if (peekToken().code >= 0x1000) {
 			this.compileSysvar();
 		} else {
 			this.compileFuncall();
 		}
 	}
 	function compileFuncall() {
-		var token = this.ax.tokens[this.tokensPos++];
+		var token = getToken();
 		var argc = this.compileParenAndParameters();
 		this.pushNewInsn(Insn.Call_builtin_func(token.type, token.code, argc), token);
 	}
@@ -553,19 +540,23 @@ class Compiler {
 		return argc;
 	}
 	function compileLeftParen() {
-		var parenToken = this.ax.tokens[this.tokensPos++];
-		if (!(parenToken != null && parenToken.type == TokenType.MARK && parenToken.code == 40)) {
+		var parenToken = getToken();
+		if (isLeftParenToken(parenToken)) {
+			return;
+		} else {
 			throw this.error('関数名の後ろに開き括弧がありません。', parenToken);
 		}
 	}
 	function compileRightParen() {
-		var parenToken = this.ax.tokens[this.tokensPos++];
-		if (!(parenToken != null && parenToken.type == TokenType.MARK && parenToken.code == 41)) {
+		var parenToken = getToken();
+		if (isRightParenToken(parenToken)) {
+			return;
+		} else {
 			throw this.error('関数パラメータの後ろに閉じ括弧がありません。', parenToken);
 		}
 	}
 	function compileVariable() {
-        switch (peekToken().type) {
+		switch (peekToken().type) {
 		case TokenType.VAR:
 			this.compileStaticVariable();
 			return;
@@ -606,7 +597,7 @@ class Compiler {
 	// thismodや変数でないパラメータの場合nullを返す
 	// token.type == TokenType.STRUCTのときに呼ばれなければならない
 	function getProxyVarType(): ProxyVarType {
-		var token = this.ax.tokens[this.tokensPos];
+		var token = peekToken();
 		if (token.code == -1) { // thismod
 			return null;
 		}
@@ -620,11 +611,11 @@ class Compiler {
 		case MPType.ARRAYVAR:
 			return ProxyVarType.ARG_ARRAY;
 		case MPType.SINGLEVAR:
-			if (this.isLeftParenToken(this.ax.tokens[this.tokensPos + 1])) {
+			if (this.isLeftParenToken(peekToken(1))) {
 				throw this.error('パラメータタイプ var の変数に添字を指定しています');
 			}
 			return ProxyVarType.ARG_VAR;
-			default: // var,array,local以外のパラメータ
+		default: // var,array,local以外のパラメータ
 			return null;
 		}
 	}
@@ -636,16 +627,14 @@ class Compiler {
 	}
 	function compileVariableSubscript(): Int {
 		var argc = 0;
-		var parenToken = this.ax.tokens[this.tokensPos];
-		if (parenToken != null && parenToken.type == TokenType.MARK && parenToken.code == 40) {
-			this.tokensPos ++;
+		if (isLeftParenToken(peekToken())) {
+			getToken();
 			argc = this.compileParameters(true);
 			if (argc == 0) {
-				throw this.error('配列変数の添字が空です', parenToken);
+				throw this.error('配列変数の添字が空です');
 			}
-			parenToken = this.ax.tokens[this.tokensPos++];
-			if (!(parenToken != null && parenToken.type == TokenType.MARK && parenToken.code == 41)) {
-				throw this.error('配列変数の添字の後ろに閉じ括弧がありません。', parenToken);
+			if (!isRightParenToken(getToken())) {
+				throw this.error('配列変数の添字の後ろに閉じ括弧がありません。');
 			}
 		}
 		return argc;

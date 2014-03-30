@@ -15,11 +15,13 @@ class TokenReader {
 		}
 	}
 
+	var cs: Array<Token>;
 	var reader: TokenReaderWithoutLookingAhead;
 	var lookahead: Array<Token> = [];
 	public var last(default,null): Token;
 
 	public function new(cs: Array<Token>) {
+		this.cs = cs;
 		this.reader = new TokenReaderWithoutLookingAhead(cs);
 	}
 
@@ -33,11 +35,19 @@ class TokenReader {
 		return token;
 	}
 
+	public function origPos() {
+		return peekToken().pos;
+	}
+
 	public function peekToken(i = 0) {
 		while (!this.reader.isEOS() && i >= this.lookahead.length) {
 			this.push();
 		}
-		return this.lookahead[i];
+		if (i < this.lookahead.length) {
+			return this.lookahead[i];
+		} else {
+			return TokenReaderUtils.makeEOS(this.cs.length);
+		}
 	}
 
 	public function isEOS() {
@@ -50,8 +60,8 @@ class TokenReader {
 		}
 	}
 
-	function save() { return copy(); }
-	function rewind(saved) { replace(saved); }
+	public function save() { return copy(); }
+	public function rewind(saved) { replace(saved); }
 
 	function copy() {
 		var clone = new TokenReader(this.cs);
@@ -59,7 +69,8 @@ class TokenReader {
 		return clone;
 	}
 
-	function replace(from) {
+	function replace(from: TokenReader) {
+		this.cs = from.cs;
 		this.reader = from.reader.copy();
 		this.lookahead = from.lookahead.copy();
 		this.last = from.last;
@@ -81,12 +92,14 @@ class TokenReaderWithoutLookingAhead {
 	}
 
 	public function getToken() {
-		if (isEOS()) return null;
+		if (isEOS()) {
+			return TokenReaderUtils.makeEOS(this.cs.length);
+		}
 		var token = this.cs[this.csOffset];
 		if (token.ex1 && !this.feededStmtHead) {
 			this.feededStmtHead = true;
 			return TokenReaderUtils.makeStmtHead(token);
-		}
+			}
 		if (token.ex2 && !this.feededComma) {
 			this.feededComma = true;
 			return TokenReaderUtils.makeComma(token);
@@ -94,6 +107,10 @@ class TokenReaderWithoutLookingAhead {
 		this.feededStmtHead = false;
 		this.feededComma = false;
 		this.csOffset += 1;
+		// パラメータ省略時の'?'はカンマをトークンとして送ることで不要になるので省く
+		if (token.ex2 && token.type == TokenType.MARK && token.code == 63) {
+			return getToken();
+		}
 		return token;
 	}
 
@@ -103,7 +120,7 @@ class TokenReaderWithoutLookingAhead {
 		return clone;
 	}
 
-	public function replace(from) {
+	public function replace(from: TokenReaderWithoutLookingAhead) {
 		this.cs = from.cs;
 		this.csOffset = from.csOffset;
 		this.feededStmtHead = from.feededStmtHead;
@@ -112,21 +129,23 @@ class TokenReaderWithoutLookingAhead {
 }
 
 class TokenReaderUtils {
+	public static function makeEOS(pos) {
+		return new Token(-1, false, false, 0, null, 0, pos, 0, 0, null, null);
+	}
+
 	public static function makeStmtHead(token) {
-		return new Token(TokenType.MARK, false, false, 256, token.fileName, token.lineNumber, token.pos, 0, 0, null, null);
+		return new Token(-1, false, false, 1, token.fileName, token.lineNumber, token.pos, 0, 0, null, null);
 
 	}
-
 	public static function makeComma(token) {
-		return new Token(TokenType.MARK, false, false, 257, token.fileName, token.lineNumber, token.pos, 0, 0, null, null);
+		return new Token(-1, false, false, 2, token.fileName, token.lineNumber, token.pos, 0, 0, null, null);
 
 	}
-
 	public static function isStmtHead(token) {
-		return token.type == TokenType.MARK && token.code == 256;
+		return token.type == -1 && token.code <= 1;
 	}
 
 	public static function isComma(token) {
-		return token.type == TokenType.MARK && token.code == 257;
+		return token.type == -1 && token.code == 2;
 	}
 }
