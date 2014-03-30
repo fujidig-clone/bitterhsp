@@ -248,11 +248,12 @@ class Compiler {
 			this.pushNewInsn(Insn.Exgoto(label), token);
 		case 0x19: // on
 			this.compileParameter(true);
+			if (!isComma(getToken())) throw this.error("カンマがありません");
 			var jumpType = this.readJumpType();
 			if (jumpType == null) {
 				throw this.error('goto / gosubが指定されていません');
 			}
-			var argc = this.compileParametersSub();
+			var argc = this.compileParameters();
 			var labels: Array<Label> = [];
 			for (i in 0...argc) {
 				labels.unshift(this.popLabelInsn());
@@ -443,12 +444,12 @@ class Compiler {
 		}
 	}
 	function compileSysvar() {
-		var token = peekToken();
+		var token = getToken();
 		if (token.type == TokenType.SYSVAR && token.code == 0x04) {
 			this.pushNewInsn(Insn.Cnt, token);
-			return;
+		} else {
+			this.pushNewInsn(Insn.Call_builtin_func(token.type, token.code, 0), token);
 		}
-		this.pushNewInsn(Insn.Call_builtin_func(token.type, token.code, 0), token);
 	}
 	function readJumpType(): JumpType {
 		var token = peekToken();
