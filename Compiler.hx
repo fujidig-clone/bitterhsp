@@ -157,7 +157,7 @@ class Compiler {
 			if (args.length != 1) {
 				throw this.error("複合代入のパラメータの数が間違っています。", token);
 			}
-			this.pushNewInsn(Insn.Compound_assign(token.val, lhs, rhs), token);
+			this.pushNewInsn(Insn.Compound_assign(token.val, lhs, args[0]), token);
 			return;
 		}
 		var args = this.compileParameters(true);
@@ -215,7 +215,7 @@ class Compiler {
 			}
 			var args = this.compileParameters();
 			argcCheck("continue", args.length <= 1, token);
-			this.pushNewInsn(Insn.Continue(this.labels[labelToken.code], argc), token);
+			this.pushNewInsn(Insn.Continue(this.labels[labelToken.code], args), token);
 		case 0x0b: // foreach
 			var labelToken = getToken();
 			if (labelToken.type != TokenType.LABEL) {
@@ -299,9 +299,9 @@ class Compiler {
 		case 0x00: // button
 			var jumpType = this.readJumpType();
 			if (jumpType == null) jumpType = JumpType.Goto;
-			var argc = this.compileParameters();
+			var args = this.compileParameters();
 			var label = this.popLabelInsn();
-			this.pushNewInsn(Insn.Call_builtin_handler_cmd(token.type, token.code, jumpType, label, argc - 1), token);
+			this.pushNewInsn(Insn.Call_builtin_handler_cmd(token.type, token.code, jumpType, label, args.slice(0, -1)), token);
 		default:
 			this.reader.rewind(saved);
 			this.compileCommand();
@@ -317,12 +317,12 @@ class Compiler {
 		var skipTo = token.pos + token.size + token.skipOffset;
 		var label = new Label();
 		this.ifLabels.pushAt(skipTo, label);
-		var argc = this.compileParameters(true);
+		var args = this.compileParameters(true);
 		if (token.code == 0) { // 'if'
-			argcCheck("if", argc == 1, token);
+			argcCheck("if", args.length == 1, token);
 			this.pushNewInsn(Insn.Ifeq(label), token);
 		} else {
-			argcCheck("else", argc == 0, token);
+			argcCheck("else", args.length == 0, token);
 			this.pushNewInsn(Insn.Goto(label), token);
 		}
 	}
@@ -393,8 +393,8 @@ class Compiler {
 			case TokenType.STRUCT:
 				this.compileStruct();
 			case TokenType.LABEL:
-				this.pushNewInsn(Insn.Push_label(this.labels[token.code]));
 				getToken();
+				this.pushNewInsn(Insn.Push_label(this.labels[token.code]));
 			case TokenType.EXTSYSVAR:
 				this.compileExtSysvar();
 			case TokenType.SYSVAR:
@@ -429,7 +429,7 @@ class Compiler {
 		return this.pushNewInsn(Insn.Binop(token.code, lhs, rhs));
 	}
 	function compileExtSysvar() {
-		if (peekToken().code >= 0x100) {
+		return if (peekToken().code >= 0x100) {
 			this.compileFuncall();
 		} else {
 			this.compileSysvar();
@@ -438,7 +438,7 @@ class Compiler {
 	function compileStruct() {
 		var token = peekToken();
 		var prmInfo = this.ax.prmsInfo[token.code];
-		if (this.getProxyVarType() != null) {
+		return if (this.getProxyVarType() != null) {
 			this.compileProxyVariable();
 		} else if (token.type == -1) {
 			this.getToken();
@@ -451,10 +451,10 @@ class Compiler {
 	}
 	function compileSysvar() {
 		var token = getToken();
-		if (token.type == TokenType.SYSVAR && token.code == 0x04) {
+		return if (token.type == TokenType.SYSVAR && token.code == 0x04) {
 			this.pushNewInsn(Insn.Cnt, token);
 		} else {
-			this.pushNewInsn(Insn.Call_builtin_func(token.type, token.code, 0), token);
+			this.pushNewInsn(Insn.Call_builtin_func(token.type, token.code, []), token);
 		}
 	}
 	function readJumpType(): JumpType {
@@ -469,7 +469,7 @@ class Compiler {
 		var token = getToken();
 		var userDefFunc = this.getUserDefFunc(token.code);
 		var argc = this.compileParenAndParameters();
-		this.pushNewInsn(Insn.Call_userdef_func(userDefFunc, argc), token);
+		return this.pushNewInsn(Insn.Call_userdef_func(userDefFunc, argc), token);
 	}
 	function compileUserDefCommand() {
 		var token = getToken();
@@ -520,16 +520,15 @@ class Compiler {
 			var token_2 = peekToken(2);
 			var token_3 = peekToken(3);
 			if (this.isLeftParenToken(token_1) && token_2.type == TokenType.DLLFUNC && this.isRightParenToken(token_3)) {
-				this.pushNewInsn(Insn.Push_int(token_2.val));
-				this.pushNewInsn(Insn.Call_builtin_func(token.type, token.code, 1), token);
 				for (i in 0...4) getToken(); 
-				return;
+				var insn = this.pushNewInsn(Insn.Push_int(token_2.val));
+				return this.pushNewInsn(Insn.Call_builtin_func(token.type, token.code, [insn]), token);
 			}
 		}
-		this.compileFuncall();
+		return this.compileFuncall();
 	}
 	function compileDllctrlCall() {
-		if (peekToken().code >= 0x1000) {
+		return if (peekToken().code >= 0x1000) {
 			this.compileSysvar();
 		} else {
 			this.compileFuncall();
@@ -538,13 +537,13 @@ class Compiler {
 	function compileFuncall() {
 		var token = getToken();
 		var argc = this.compileParenAndParameters();
-		this.pushNewInsn(Insn.Call_builtin_func(token.type, token.code, argc), token);
+		return this.pushNewInsn(Insn.Call_builtin_func(token.type, token.code, argc), token);
 	}
-	function compileParenAndParameters(): Int {
+	function compileParenAndParameters(): Array<Instruction> {
 		this.compileLeftParen();
-		var argc = this.compileParameters();
+		var args = this.compileParameters();
 		this.compileRightParen();
-		return argc;
+		return args;
 	}
 	function compileLeftParen() {
 		var parenToken = getToken();
@@ -565,12 +564,10 @@ class Compiler {
 	function compileVariable() {
 		switch (peekToken().type) {
 		case TokenType.VAR:
-			this.compileStaticVariable();
-			return;
+			return this.compileStaticVariable();
 		case TokenType.STRUCT:
 			if (this.getProxyVarType() != null) {
-				this.compileProxyVariable();
-				return;
+				return this.compileProxyVariable();
 			}
 		default:
 		}
@@ -578,25 +575,25 @@ class Compiler {
 	}
 	function compileStaticVariable(): Instruction {
 		var token = getToken();
-		var argc = this.compileVariableSubscript();
-		return this.pushNewInsn(Insn.Push_var(token.code, argc), token);
+		var args = this.compileVariableSubscript();
+		return this.pushNewInsn(Insn.Push_var(token.code, args), token);
 	}
 	function compileProxyVariable() {
 		var proxyVarType = this.getProxyVarType();
 		var token = getToken();
 		var prmInfo = this.ax.prmsInfo[token.code];
 		var funcInfo = this.ax.funcsInfo[this.getFinfoIdByMinfoId(token.code)];
-		switch(proxyVarType) {
+		return switch(proxyVarType) {
 		case ProxyVarType.MEMBER:
-			var argc = this.compileVariableSubscript();
+			var args = this.compileVariableSubscript();
 			var id = token.code - funcInfo.prmindex - 1;
-			this.pushNewInsn(Insn.Push_member(id, argc), token);
+			return this.pushNewInsn(Insn.Push_member(id, args), token);
 		case ProxyVarType.ARG_VAR:
-			this.pushNewInsn(Insn.Getarg(token.code - funcInfo.prmindex), token);
+			return this.pushNewInsn(Insn.Getarg(token.code - funcInfo.prmindex), token);
 		case ProxyVarType.ARG_ARRAY, ProxyVarType.ARG_LOCAL:
 			var id = token.code - funcInfo.prmindex;
-			var argc = this.compileVariableSubscript();
-			this.pushNewInsn(Insn.Push_arg_var(id, argc), token);
+			var args = this.compileVariableSubscript();
+			return this.pushNewInsn(Insn.Push_arg_var(id, args), token);
 		default:
 			throw ""; // proxyVarType == nullとなるときに呼び出してはいけない
 		}
@@ -632,19 +629,20 @@ class Compiler {
 	function isRightParenToken(token: Token) {
 		return token != null && token.type == TokenType.MARK && token.code == 41;
 	}
-	function compileVariableSubscript(): Int {
-		var argc = 0;
+	function compileVariableSubscript(): Array<Instruction> {
 		if (isLeftParenToken(peekToken())) {
 			getToken();
-			argc = this.compileParameters(true);
-			if (argc == 0) {
+			var args = this.compileParameters(true);
+			if (args.length == 0) {
 				throw this.error('配列変数の添字が空です');
 			}
 			if (!isRightParenToken(getToken())) {
 				throw this.error('配列変数の添字の後ろに閉じ括弧がありません。');
 			}
+			return args;
+		} else {
+			return [];
 		}
-		return argc;
 	}
 }
 
@@ -679,7 +677,7 @@ enum Insn {
 	Push_string(x:String);
 	Push_label(x:Label);
 	Push_default;
-	Push_var(id:Int, argc:Int);
+	Push_var(id:Int, indices: Array<Instruction>);
 	Pop;
 	Binop(op:Int, lhs:Instruction, rhs:Instruction);
 	Goto(label:Label);
