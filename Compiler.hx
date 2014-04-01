@@ -68,9 +68,11 @@ class Compiler {
 		}
 		return ret.concat(this.labels);
 	}
-	function pushNewInsn(opts: Insn, ?token: Token) {
+	function pushNewInsn(opts: Insn, ?token: Token): Instruction {
 		if (token == null) token = this.reader.last;
-		this.sequence.push(new Instruction(opts, token.fileName, token.lineNumber, null, this.reader.origPos()));
+		var insn = new Instruction(opts, token.fileName, token.lineNumber, null, this.reader.origPos());
+		this.sequence.push(insn);
+		return insn;
 	}
 	function getToken() {
 		return this.reader.getToken();
@@ -133,7 +135,7 @@ class Compiler {
 		}
 	}
 	function compileAssignment() {
-		this.compileVariable();
+		var lhs = this.compileVariable();
 
 		var token = getToken();
 		if (token.type != TokenType.MARK) {
@@ -141,28 +143,28 @@ class Compiler {
 		}
 		if (isStmtHead(peekToken())) {
 			if (token.val == 0) { // インクリメント
-				this.pushNewInsn(Insn.Inc, token);
+				this.pushNewInsn(Insn.Inc(lhs), token);
 				return;
 			}
 			if (token.val == 1) { // デクリメント
-				this.pushNewInsn(Insn.Dec, token);
+				this.pushNewInsn(Insn.Dec(lhs), token);
 				return;
 			}
 		}
 		if (token.val != 8) { // CALCCODE_EQ
 			// 複合代入
-			var argc = this.compileParameters(true);
-			if (argc != 1) {
+			var args = this.compileParameters(true);
+			if (args.length != 1) {
 				throw this.error("複合代入のパラメータの数が間違っています。", token);
 			}
-			this.pushNewInsn(Insn.Compound_assign(token.val), token);
+			this.pushNewInsn(Insn.Compound_assign(token.val, lhs, rhs), token);
 			return;
 		}
-		var argc = this.compileParameters(true);
-		if (argc == 0) {
+		var args = this.compileParameters(true);
+		if (args.length == 0) {
 			throw this.error("代入のパラメータの数が間違っています。", token);
 		}
-		this.pushNewInsn(Insn.Assign(argc), token);
+		this.pushNewInsn(Insn.Assign(lhs, args), token);
 	}
 	function compileProgramCommand() {
 		var saved = this.reader.save();
@@ -172,66 +174,64 @@ class Compiler {
 			if (peekToken().type == TokenType.LABEL && isStmtHead(peekToken(1))) {
 				this.pushNewInsn(Insn.Goto(this.labels[getToken().code]));
 			} else {
-				var argc = this.compileParameters();
-				argcCheck("goto", argc == 1, token);
-				this.pushNewInsn(Insn.Goto_expr, token);
+				this.reader.rewind(saved);
+				this.compileCommand();
 			}
 		case 0x01: // gosub
 			if (peekToken().type == TokenType.LABEL && isStmtHead(peekToken(1))) {
 				this.pushNewInsn(Insn.Gosub(this.labels[getToken().code]));
 			} else {
-				var argc = this.compileParameters();
-				argcCheck("gosub", argc == 1, token);
-				this.pushNewInsn(Insn.Gosub_expr, token);
+				this.reader.rewind(saved);
+				this.compileCommand();
 			}
 		case 0x02: // return
-			var argc = this.compileParameters(true);
-			argcCheck("return", argc <= 1, token);
-			this.pushNewInsn(Insn.Return(argc == 1), token);
+			var args = this.compileParameters(true);
+			argcCheck("return", args.length <= 1, token);
+			this.pushNewInsn(Insn.Return(args[0]), token);
 		case 0x03: // break
 			var labelToken = getToken();
 			if (labelToken.type != TokenType.LABEL) {
 				throw this.error();
 			}
-			var argc = this.compileParameters();
-			argcCheck("break", argc == 0, token);
+			var args = this.compileParameters();
+			argcCheck("break", args.length == 0, token);
 			this.pushNewInsn(Insn.Break(this.labels[labelToken.code]), token);
 		case 0x04: // repeat
 			var labelToken = getToken();
 			if (labelToken.type != TokenType.LABEL) {
 				throw this.error();
 			}
-			var argc = this.compileParameters();
-			argcCheck("repeat", argc <= 2, token);
-			this.pushNewInsn(Insn.Repeat(this.labels[labelToken.code], argc), token);
+			var args = this.compileParameters();
+			argcCheck("repeat", args.length <= 2, token);
+			this.pushNewInsn(Insn.Repeat(this.labels[labelToken.code], args), token);
 		case 0x05: // loop
-			var argc = this.compileParameters();
-			argcCheck("loop", argc == 0, token);
+			var args = this.compileParameters();
+			argcCheck("loop", args.length == 0, token);
 			this.pushNewInsn(Insn.Loop, token);
 		case 0x06: // continue
 			var labelToken = getToken();
 			if (labelToken.type != TokenType.LABEL) {
 				throw this.error();
 			}
-			var argc = this.compileParameters();
-			argcCheck("continue", argc <= 1, token);
+			var args = this.compileParameters();
+			argcCheck("continue", args.length <= 1, token);
 			this.pushNewInsn(Insn.Continue(this.labels[labelToken.code], argc), token);
 		case 0x0b: // foreach
 			var labelToken = getToken();
 			if (labelToken.type != TokenType.LABEL) {
 				throw this.error();
 			}
-			var argc = this.compileParameters();
-			if (argc > 0) throw this.error();
+			var args = this.compileParameters();
+			if (args.length > 0) throw this.error();
 			this.pushNewInsn(Insn.Foreach(this.labels[labelToken.code]), token);
 		case 0x0c: // eachchk
 			var labelToken = getToken();
 			if (labelToken.type != TokenType.LABEL) {
 				throw this.error();
 			}
-			var argc = this.compileParameters();
-			argcCheck("foreach", argc == 1, token);
-			this.pushNewInsn(Insn.Eachchk(this.labels[labelToken.code]), token);
+			var args = this.compileParameters();
+			argcCheck("foreach", args.length == 1, token);
+			this.pushNewInsn(Insn.Eachchk(this.labels[labelToken.code], args[0]), token);
 		case 0x12: // newmod
 			this.compileVariable(); 
 			var structToken = getToken();
@@ -240,26 +240,26 @@ class Compiler {
 				throw this.error('モジュールが指定されていません', structToken);
 			}
 			var module = this.getModule(prmInfo.subid);
-			var argc = this.compileParametersSub();
-			this.pushNewInsn(Insn.Newmod(module, argc), token);
+			var args = this.compileParametersSub();
+			this.pushNewInsn(Insn.Newmod(module, args), token);
 		case 0x18: // exgoto
-			var argc = this.compileParameters();
-			argcCheck("exgoto", argc == 4, token);
+			var args = this.compileParameters();
+			argcCheck("exgoto", args.length == 4, token);
 			var label = this.popLabelInsn();
-			this.pushNewInsn(Insn.Exgoto(label), token);
+			this.pushNewInsn(Insn.Exgoto(label, args), token);
 		case 0x19: // on
-			this.compileParameter(true);
+			var arg = this.compileParameter(true);
 			if (!isComma(getToken())) throw this.error("カンマがありません");
 			var jumpType = this.readJumpType();
 			if (jumpType == null) {
 				throw this.error('goto / gosubが指定されていません');
 			}
-			var argc = this.compileParameters();
+			var args = this.compileParameters();
 			var labels: Array<Label> = [];
-			for (i in 0...argc) {
+			for (i in 0...args.length) {
 				labels.unshift(this.popLabelInsn());
 			}
-			this.pushNewInsn(Insn.On(labels, jumpType), token);
+			this.pushNewInsn(Insn.On(arg, labels, jumpType), token);
 		default:
 			this.reader.rewind(saved);
 			this.compileCommand();
@@ -327,13 +327,13 @@ class Compiler {
 		}
 	}
 	function popLabelInsn(): Label {
-			var insn = this.sequence.pop();
-			switch (insn.opts) {
-			case Insn.Push_label(label):
-				return label;
-			default:
-				throw this.error('ラベル名が指定されていません');
-			}
+		var insn = this.sequence.pop();
+		switch (insn.opts) {
+		case Insn.Push_label(label):
+			return label;
+		default:
+			throw this.error('ラベル名が指定されていません');
+		}
 	}
 	function readLabelLiteral(): Label {
 		var token = getToken();
@@ -343,55 +343,53 @@ class Compiler {
 			return null;
 		}
 	}
-	function compileParameters(cannotBeOmitted = false): Int {
+	function compileParameters(cannotBeOmitted = false): Array<Instruction> {
 		var token = peekToken();
 		if (isStmtHead(token) || isRightParenToken(token)) {
-			return 0;
+			return [];
 		}
-		var argc = 1;
-		this.compileParameter(cannotBeOmitted);
-		argc += this.compileParametersSub(cannotBeOmitted);
-		return argc;
+		var arg0 = this.compileParameter(cannotBeOmitted);
+		return [arg0].concat(this.compileParametersSub(cannotBeOmitted));
 	}
-	function compileParametersSub(cannotBeOmitted = false): Int {
-		var argc = 0;
+	function compileParametersSub(cannotBeOmitted = false): Array<Instruction> {
+		var args = [];
 		while (true) {
 			var token = peekToken();
 			if (isStmtHead(token) || isRightParenToken(token)) {
-				return argc;
+				break;
 			}
 			if (!isComma(getToken())) {
 				throw this.error("カンマがありません");
 			}
-			this.compileParameter(cannotBeOmitted);
-			argc ++;
+			args.push(compileParameter(cannotBeOmitted));
 		}
+		return args;
 	}
-	function compileParameter(cannotBeOmitted) {
+	function compileParameter(cannotBeOmitted): Instruction {
 		if (isComma(peekToken())) {
 				if (cannotBeOmitted) {
 					throw this.error('パラメータの省略はできません');
 				}
-				this.pushNewInsn(Insn.Push_default);
-				return;
+				return this.pushNewInsn(Insn.Push_default);
 		}
+		var stack = [];
 		while (true) {
 			var token = peekToken();
-			if (isStmtHead(token) || isComma(token) || isRightParenToken(token)) return;
-			switch(token.type) {
+			if (isStmtHead(token) || isComma(token) || isRightParenToken(token)) break;
+			stack.push(switch(token.type) {
 			case TokenType.MARK:
-				this.compileOperator();
+				this.compileOperator(stack);
 			case TokenType.VAR:
 				this.compileStaticVariable();
 			case TokenType.STRING:
+				getToken();
 				this.pushNewInsn(Insn.Push_string(token.stringValue));
-				getToken();
 			case TokenType.DNUM:
+				getToken();
 				this.pushNewInsn(Insn.Push_double(token.doubleValue));
-				getToken();
 			case TokenType.INUM:
-				this.pushNewInsn(Insn.Push_int(token.val));
 				getToken();
+				this.pushNewInsn(Insn.Push_int(token.val));
 			case TokenType.STRUCT:
 				this.compileStruct();
 			case TokenType.LABEL:
@@ -409,19 +407,26 @@ class Compiler {
 				this.compileDllctrlCall();
 			default:
 				this.compileFuncall();
-			}
+			});
+		}
+		if (stack.length == 1) {
+			return stack[0];
+		} else {
+			throw this.error("式の構文に問題があります");
 		}
 	}
-	function compileOperator() {
-		var OP_INSN = [Insn.Add, Insn.Sub, Insn.Mul, Insn.Div, Insn.Mod,
-					   Insn.And, Insn.Or, Insn.Xor, Insn.Eq, Insn.Ne,
-					   Insn.Gt, Insn.Lt, Insn.Gteq, Insn.Lteq, Insn.Rsh, Insn.Lsh];
+	function compileOperator(stack) {
 		var token = getToken();
+		if (stack.length < 2) {
+			throw this.error();
+		}
+		var rhs = stack.pop();
+		var lhs = stack.pop();
 		if (!(0 <= token.code && token.code < 16)) {
 			throw this.error("演算子コード " + token.code + " は解釈できません。", token);
 		}
 		var len = sequence.length;
-		this.pushNewInsn(OP_INSN[token.code], token);
+		return this.pushNewInsn(Insn.Binop(token.code, lhs, rhs));
 	}
 	function compileExtSysvar() {
 		if (peekToken().code >= 0x100) {
@@ -571,10 +576,10 @@ class Compiler {
 		}
 		throw this.error('変数が指定されていません');
 	}
-	function compileStaticVariable() {
+	function compileStaticVariable(): Instruction {
 		var token = getToken();
 		var argc = this.compileVariableSubscript();
-		this.pushNewInsn(Insn.Push_var(token.code, argc), token);
+		return this.pushNewInsn(Insn.Push_var(token.code, argc), token);
 	}
 	function compileProxyVariable() {
 		var proxyVarType = this.getProxyVarType();
@@ -700,7 +705,7 @@ enum Insn {
 	Continue(label:Label, args: Array<Instruction>);
 	Break(label:Label);
 	Foreach(label:Label);
-	Eachchk(label:Label);
+	Eachchk(label:Label, arg: Instruction);
 	Gosub(label:Label);
 	Exgoto(label:Label, args: Array<Instruction>);
 	On(arg: Instruction, labels:Array<Label>, jumpType:JumpType);
