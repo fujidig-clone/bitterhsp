@@ -92,6 +92,11 @@ class Compiler {
 		if (token == null) token = this.reader.last;
 		return new CompileError(message, token.fileName, token.lineNumber);
 	}
+	function argcCheck(command: String, pass: Bool, token: Token) {
+		if (!pass) {
+			throw this.error(command+"の引数の数が違います", token);
+		}
+	}
 	function compileStatement() {
 		if (!isStmtHead(getToken())) {
 			throw this.error();
@@ -168,7 +173,7 @@ class Compiler {
 				this.pushNewInsn(Insn.Goto(this.labels[getToken().code]));
 			} else {
 				var argc = this.compileParameters();
-				if (argc != 1) throw this.error('goto の引数の数が違います', token);
+				argcCheck("goto", argc == 1, token);
 				this.pushNewInsn(Insn.Goto_expr, token);
 			}
 		case 0x01: // gosub
@@ -176,12 +181,12 @@ class Compiler {
 				this.pushNewInsn(Insn.Gosub(this.labels[getToken().code]));
 			} else {
 				var argc = this.compileParameters();
-				if (argc != 1) throw this.error('gosub の引数の数が違います', token);
+				argcCheck("gosub", argc == 1, token);
 				this.pushNewInsn(Insn.Gosub_expr, token);
 			}
 		case 0x02: // return
 			var argc = this.compileParameters(true);
-			if (argc > 1) throw this.error('return の引数が多すぎます', token);
+			argcCheck("return", argc <= 1, token);
 			this.pushNewInsn(Insn.Return(argc == 1), token);
 		case 0x03: // break
 			var labelToken = getToken();
@@ -189,7 +194,7 @@ class Compiler {
 				throw this.error();
 			}
 			var argc = this.compileParameters();
-			if (argc > 0) throw this.error('break の引数が多すぎます', token);
+			argcCheck("break", argc == 0, token);
 			this.pushNewInsn(Insn.Break(this.labels[labelToken.code]), token);
 		case 0x04: // repeat
 			var labelToken = getToken();
@@ -197,11 +202,11 @@ class Compiler {
 				throw this.error();
 			}
 			var argc = this.compileParameters();
-			if (argc > 2) throw this.error('repeat の引数が多すぎます', token);
+			argcCheck("repeat", argc <= 2, token);
 			this.pushNewInsn(Insn.Repeat(this.labels[labelToken.code], argc), token);
 		case 0x05: // loop
 			var argc = this.compileParameters();
-			if (argc > 0) throw this.error('loop の引数が多すぎます', token);
+			argcCheck("loop", argc == 0, token);
 			this.pushNewInsn(Insn.Loop, token);
 		case 0x06: // continue
 			var labelToken = getToken();
@@ -209,7 +214,7 @@ class Compiler {
 				throw this.error();
 			}
 			var argc = this.compileParameters();
-			if (argc > 1) throw this.error('continue の引数が多すぎます', token);
+			argcCheck("continue", argc <= 1, token);
 			this.pushNewInsn(Insn.Continue(this.labels[labelToken.code], argc), token);
 		case 0x0b: // foreach
 			var labelToken = getToken();
@@ -225,7 +230,7 @@ class Compiler {
 				throw this.error();
 			}
 			var argc = this.compileParameters();
-			if (argc != 1) throw this.error('foreach の引数の数が違います', token);
+			argcCheck("foreach", argc == 1, token);
 			this.pushNewInsn(Insn.Eachchk(this.labels[labelToken.code]), token);
 		case 0x12: // newmod
 			this.compileVariable(); 
@@ -239,11 +244,11 @@ class Compiler {
 			this.pushNewInsn(Insn.Newmod(module, argc), token);
 		case 0x14: // delmod
 			var argc = this.compileParameters();
-			if (argc != 1) throw this.error('delmod の引数の数が違います', token);
+			argcCheck("delmod", argc == 1, token);
 			this.pushNewInsn(Insn.Delmod, token);
 		case 0x18: // exgoto
 			var argc = this.compileParameters();
-			if (argc != 4) throw this.error('exgoto の引数の数が違います', token);
+			argcCheck("exgoto", argc == 4, token);
 			var label = this.popLabelInsn();
 			this.pushNewInsn(Insn.Exgoto(label), token);
 		case 0x19: // on
@@ -318,10 +323,10 @@ class Compiler {
 		this.ifLabels.pushAt(skipTo, label);
 		var argc = this.compileParameters(true);
 		if (token.code == 0) { // 'if'
-			if (argc != 1) throw this.error("if の引数の数が間違っています。", token);
+			argcCheck("if", argc == 1, token);
 			this.pushNewInsn(Insn.Ifeq(label), token);
 		} else {
-			if (argc != 0) throw this.error("else の引数の数が間違っています。", token);
+			argcCheck("else", argc == 0, token);
 			this.pushNewInsn(Insn.Goto(label), token);
 		}
 	}
