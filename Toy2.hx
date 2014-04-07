@@ -45,12 +45,8 @@ class Toy2 {
 	}
 	function retrieveVarFromInitializeCommand(insn:Instruction): Null<Int> {
 		switch (insn.opts) {
-		case Assign(insn2, _):
-			switch (insn2.opts) {
-			case Push_var(id,_):
-				return id;
-			default:
-			}
+		case Assign({opts: Push_var(id,_)}, _):
+			return id;
 		default:
 		}
 		return null;
