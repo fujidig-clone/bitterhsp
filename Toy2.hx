@@ -21,7 +21,13 @@ class Toy2 {
 	}
 
 	public function main_() {
-		var stat = copy();
+		for (insn in eachInsn()) {
+			var id = retrieveVarFromInitializeCommand(insn);
+			if (id != null) {
+				trace('${insn}: ${id}');
+			}
+		}
+		//var stat = copy();
 	}
 
 	var sequence: Instruction;
@@ -36,6 +42,18 @@ class Toy2 {
 		this.userDefFuncs = compiled.userDefFuncs.filter(function(x) return x != null);
 		setupProcedures();
 		for (p in this.procedures) labelToProc[p.label] = p;
+	}
+	function retrieveVarFromInitializeCommand(insn:Instruction): Null<Int> {
+		switch (insn.opts) {
+		case Assign(insn2, _):
+			switch (insn2.opts) {
+			case Push_var(id,_):
+				return id;
+			default:
+			}
+		default:
+		}
+		return null;
 	}
 	function copy() {
 		var used = new Map<Instruction,Procedure>();
