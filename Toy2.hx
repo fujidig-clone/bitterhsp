@@ -45,8 +45,14 @@ class Toy2 {
 	}
 	function retrieveVarFromInitializeCommand(insn:Instruction): Null<Int> {
 		switch (insn.opts) {
-		case Assign({opts: Push_var(id,_)}, _):
+		case Assign({opts: Push_var(id,[])}, _):
 			return id;
+		case Call_builtin_cmd(TokenType.PROGCMD,code=0x09 | 0x0a | 0x0d, args): // dim, sdim. dimtype
+			switch (args[0].opts) {
+			case Push_var(id,[]):
+				return id;
+			default:
+			}
 		default:
 		}
 		return null;
